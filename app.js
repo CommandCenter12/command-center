@@ -804,10 +804,16 @@ async function askGemini(q) {
   if (!key) { toast('Add your Gemini API key in Settings first'); openSettings(); return; }
   toast('Asking Gemini…', 8000);
   try {
-    const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent', {
-      method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-      body: JSON.stringify({ contents: [{ parts: [{ text: q }] }], systemInstruction: { parts: [{ text: 'Answer in clear, simple English for a 9th-grade student. Keep it short unless asked for more.' }] } })
-    });
+    const body = JSON.stringify({ contents: [{ parts: [{ text: q }] }], systemInstruction: { parts: [{ text: 'Answer in clear, simple English for a 9th-grade student. Keep it short unless asked for more.' }] } });
+    let r = null;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      r = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key }, body
+      });
+      if (r.status !== 429) break;
+      if (attempt < 3) { toast('Rate limit reached. Retrying in ' + (2 ** attempt) + 's…', 2000); await new Promise(res => setTimeout(res, 1000 * 2 ** attempt)); }
+    }
+    if (r.status === 429) throw new Error('Rate limit reached. Please wait a moment before sending another message.');
     const j = await r.json();
     if (!r.ok) throw new Error((j.error && j.error.message) || r.statusText);
     const text = ((j.candidates || [])[0] || {}).content ? j.candidates[0].content.parts.map(p => p.text).join('') : 'No answer came back.';
