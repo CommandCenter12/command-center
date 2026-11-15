@@ -874,7 +874,6 @@ function renderGoalWidget() {
   $('#goal-body').innerHTML = goalHtml({ total_value: (s.summary || {}).total_value }) +
     `<div class="box" style="margin-top:12px"><h3>PDT counter (5 business days)</h3><div class="kv"><span>Day trades used</span><b class="${n >= 3 ? 'down' : ''}">${n} of 3</b></div><p class="small muted" style="margin:6px 0 0">${n >= 3 ? 'Limit reached. Another same-day round trip would flag your margin account.' : 'Accounts under $25,000 may make 3 day trades per rolling 5 business days.'}</p></div>`;
 }
-function renderPrinter() { renderPrinterWidget(); }
 function renderAll() { renderGoalWidget(); renderPrinter(); renderHeader(); renderBriefing(); renderImportant(); renderTodo(); renderApps(); if ($('#sheet-stocks').classList.contains('open')) renderStocks(); }
 setInterval(() => { tickClock(); if (state.unlocked) renderHeader(); }, 15000);
 
