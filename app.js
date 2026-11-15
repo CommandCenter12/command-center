@@ -534,8 +534,8 @@ document.addEventListener('touchstart', e => { const item = e.target.closest('.a
 ['touchend', 'touchmove', 'touchcancel'].forEach(ev => document.addEventListener(ev, () => clearTimeout(lpTimer), { passive: true }));
 
 /* ------------------------------------------------------------------ sheets */
-function openSheet(el) { el.classList.add('open'); el.setAttribute('aria-hidden', 'false'); hidePreview(); }
-function closeSheet(el) { el.classList.remove('open'); el.setAttribute('aria-hidden', 'true'); }
+function openSheet(el) { el.inert = false; el.classList.add('open'); el.setAttribute('aria-hidden', 'false'); hidePreview(); }
+function closeSheet(el) { if (el.contains(document.activeElement) && document.activeElement.blur) document.activeElement.blur(); el.inert = true; el.classList.remove('open'); el.setAttribute('aria-hidden', 'true'); }
 $$('.sheet').forEach(s => s.addEventListener('click', e => { if (e.target.closest('[data-close]')) closeSheet(s); }));
 
 /* ----------------------------------------------------------------- add app */
@@ -804,7 +804,7 @@ async function askGemini(q) {
   if (!key) { toast('Add your Gemini API key in Settings first'); openSettings(); return; }
   toast('Asking Gemini…', 8000);
   try {
-    const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent', {
+    const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent', {
       method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
       body: JSON.stringify({ contents: [{ parts: [{ text: q }] }], systemInstruction: { parts: [{ text: 'Answer in clear, simple English for a 9th-grade student. Keep it short unless asked for more.' }] } })
     });
@@ -933,7 +933,7 @@ function scheduleSync() {
   if (!state.unlocked || !lsGet(SYNC.token, '')) return;
   clearTimeout(syncTimer); syncTimer = setTimeout(() => pushRemote().catch(e => setSync('Auto-save failed: ' + e.message)), 3000);
 }
-async function pushRemote() {
+async function pushRemote(attempt = 1) {
   const tok = lsGet(SYNC.token, ''); if (!tok) throw new Error('add a GitHub token in Settings');
   if (!state.key) throw new Error('unlock first');
   if (pushing) return; pushing = true;
@@ -942,13 +942,14 @@ async function pushRemote() {
     const h = { Authorization: 'Bearer ' + tok, Accept: 'application/vnd.github+json' };
     setSync('Saving to GitHub…');
     const g = await fetch(api, { headers: h, cache: 'no-store' });
-    if (!g.ok && g.status !== 404) throw new Error('GitHub ' + g.status + ' on read');
+    if (!g.ok && g.status !== 404) throw new Error(ghErr(g.status));
     const sha = g.ok ? (await g.json()).sha : undefined;
     const updated = new Date().toISOString();
     const bytes = await sealState({ sync: true, updated, ls: snapshotLS(), images: await snapshotImages(), data: state.data });
     const p = await fetch(api, { method: 'PUT', headers: { ...h, 'Content-Type': 'application/json' }, body: JSON.stringify({ message: 'Save: ' + updated.slice(0, 16).replace('T', ' '), content: bytesToB64(bytes), sha, branch: 'main' }) });
-    if (p.status === 409) { pushing = false; setSync('Newer copy found, loading it…'); await pullRemote(true); return; }
-    if (!p.ok) throw new Error('GitHub ' + p.status + ' on save');
+    if (p.status === 409 && attempt < 4) { pushing = false; setSync('Save conflict, retrying…'); await new Promise(r => setTimeout(r, 900 * attempt)); return pushRemote(attempt + 1); }
+    if (p.status === 409) throw new Error('GitHub kept changing. Try again in a moment.');
+    if (!p.ok) throw new Error(ghErr(p.status));
     lsSet(SYNC.seen, updated); setSync('Saved to GitHub at ' + new Date().toLocaleTimeString());
   } finally { pushing = false; }
 }
@@ -1013,7 +1014,9 @@ $('#ics-export').addEventListener('click', () => {
 setInterval(() => { if (state.unlocked && printerCfg().ip && location.protocol === 'http:') pollPrinter(); }, 15000);
 
 /* -------------------------------------------------------------------- init */
+function ghErr(s) { if (s === 401 || s === 403) return 'token rejected (' + s + '). Create a new fine-grained token with Contents: Read and write for this repository, then paste it in Settings'; if (s === 404) return 'repository or file not found (404)'; return 'GitHub error ' + s; }
 async function init() {
+  $$('.sheet').forEach(s => { s.inert = true; });
   applyTheme(); tickClock(); renderDots(); document.body.classList.add('locked');
   if ('serviceWorker' in navigator && window.isSecureContext && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
   await detectBio();
