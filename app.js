@@ -262,7 +262,7 @@ async function bioEnrollStep2() {
   return method;
 }
 async function bioUnwrapPasscode() {
-  const rec = bioRec(); if (!rec || !rec.wrapped) throw new Error('Face ID / Touch ID is not set up on this device');
+  const rec = bioRec(); if (rec && rec.pending && !rec.wrapped) throw new Error('setup not finished. Open Settings and press Enroll this device'); if (!rec || !rec.wrapped) throw new Error('not set up on this device. Open Settings and press Enroll this device');
   const opts = { challenge: rand(32), rpId: RP_ID, allowCredentials: [{ type: 'public-key', id: unb64u(rec.credId), transports: ['internal'] }], userVerification: 'required', timeout: 60000 };
   if (rec.method === 'prf') opts.extensions = { prf: { eval: { first: unb64u(rec.prfSalt) } } };
   const a = await navigator.credentials.get({ publicKey: opts });
@@ -834,8 +834,9 @@ function renderSettings() {
 $('#bio-enroll').addEventListener('click', async () => {
   const rec = bioRec();
   try {
-    if (!rec || !rec.pending) { await bioEnrollStep1(); renderSettings(); toast('Passkey created — now confirm once'); }
-    else { const method = await bioEnrollStep2(); renderSettings(); refreshBioButtons(); toast(method === 'prf' ? 'Face ID / Touch ID enabled (hardware-bound)' : 'Face ID / Touch ID enabled'); }
+    if (!rec || !rec.pending) await bioEnrollStep1();
+    const method = await bioEnrollStep2(); renderSettings(); refreshBioButtons();
+    toast(method === 'prf' ? 'Face ID / Touch ID enabled (hardware-bound)' : 'Face ID / Touch ID enabled');
   } catch (e) { console.warn(e); toast(e.name === 'NotAllowedError' ? 'Cancelled' : 'Could not enroll: ' + (e.message || e.name)); }
 });
 $('#bio-remove').addEventListener('click', () => { localStorage.removeItem(LS.bio); renderSettings(); refreshBioButtons(); toast('Biometric unlock removed from this device'); });
