@@ -21,7 +21,7 @@ const state = { data: null, key: null, salt: null, passcode: null, urls: [], las
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const lsGet = (k, fb) => { try { const v = localStorage.getItem(k); return v == null ? fb : JSON.parse(v); } catch { return fb; } };
-const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* private mode */ } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* private mode */ } scheduleSync(); };
 const rand = n => crypto.getRandomValues(new Uint8Array(n));
 const hex = u8 => Array.from(u8, b => b.toString(16).padStart(2, '0')).join('');
 const unhex = s => new Uint8Array((s.match(/../g) || []).map(h => parseInt(h, 16)));
@@ -73,10 +73,10 @@ async function deriveKey(passcode, salt) {
   const ck = hex(salt) + ':' + passcode;
   if (keyCache.has(ck)) return keyCache.get(ck);
   const base = await crypto.subtle.importKey('raw', enc.encode(passcode), 'PBKDF2', false, ['deriveKey']);
-  const key = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations: PBKDF2_ITER, hash: 'SHA-256' }, base, { name: 'AES-GCM', length: 256 }, true, ['decrypt']);
+  const key = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations: PBKDF2_ITER, hash: 'SHA-256' }, base, { name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']);
   keyCache.set(ck, key); return key;
 }
-const importRawKey = raw => crypto.subtle.importKey('raw', raw, { name: 'AES-GCM' }, true, ['decrypt']);
+const importRawKey = raw => crypto.subtle.importKey('raw', raw, { name: 'AES-GCM' }, true, ['encrypt', 'decrypt']);
 async function decryptBuf(buf, key) { const { iv, ct } = parseEnc(buf); return crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ct); }
 
 let encCache = null;
@@ -292,6 +292,7 @@ async function bioUnlock() {
 
 /* ------------------------------------------------------------------ unlock */
 function onUnlocked(data, restored) {
+  hydrateImages().catch(() => {}); pullRemote(false).catch(e => setSync('Cloud load skipped: ' + e.message));
   state.data = data || {}; state.unlocked = true;
   const sk = state.data.settings && state.data.settings.gemini_key; if (sk && !lsGet(LS.gemini, '')) lsSet(LS.gemini, sk);
   hideLock();
@@ -452,7 +453,8 @@ function allApps() {
   const custom = lsGet(LS.apps, []).map(a => ({ ...a, custom: true }));
   return [...fromData, ...custom].filter(a => !hidden.has(a.id));
 }
-function iconHtml(a) {
+function iconHtml(a0) {
+  const a = Object.assign({}, a0, imgOf(a0) ? { image: imgOf(a0) } : {});
   const inner = a.image ? `<img src="${a.image}" alt="">` : a.svg ? a.svg : /^https?:\/\//.test(a.icon || '') ? `<img src="${esc(a.icon)}" alt="">` : (a.icon && /\p{Extended_Pictographic}/u.test(a.icon)) ? `<span>${esc(a.icon)}</span>` : `<span class="glyph-text">${esc((a.icon || a.name || '?').slice(0, 2))}</span>`;
   return `<div class="icon${a.image ? ' logo' : ''}" style="background:${a.image ? '#ffffff' : esc(a.bg || a.color || '#5e5ce6')}">${inner}</div>`;
 }
@@ -536,7 +538,7 @@ $('#aa-file').addEventListener('change', e => {
   if (!/^image\//.test(f.type)) { toast('Please choose an image file'); return; }
   const src = URL.createObjectURL(f); const img = new Image();
   img.onload = () => {
-    const s = 256, c = document.createElement('canvas'); c.width = s; c.height = s;
+    const s = 128, c = document.createElement('canvas'); c.width = s; c.height = s;
     const x = c.getContext('2d'), k = Math.max(s / img.width, s / img.height), w = img.width * k, h = img.height * k;
     x.drawImage(img, (s - w) / 2, (s - h) / 2, w, h);
     aaImage = c.toDataURL('image/png');
@@ -556,7 +558,7 @@ $('#addapp-form').addEventListener('submit', e => {
   e.preventDefault();
   let url = $('#aa-url').value.trim(); if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
   const name = $('#aa-name').value.trim(); const icon = $('#aa-icon').value.trim() || name.slice(0, 2); const color = $('#aa-color').value;
-  const apps = lsGet(LS.apps, []); apps.push({ id: 'u-' + Date.now().toString(36), name, url, icon, image: aaImage || undefined, bg: `linear-gradient(145deg, ${color}, ${shade(color, -35)})` }); lsSet(LS.apps, apps);
+  const apps = lsGet(LS.apps, []); const aid = 'u-' + Date.now().toString(36); if (aaImage) idbPut('img-' + aid, aaImage).catch(() => {}); apps.push({ id: aid, name, url, icon, imageKey: aaImage ? 'img-' + aid : undefined, bg: `linear-gradient(145deg, ${color}, ${shade(color, -35)})` }); lsSet(LS.apps, apps);
   closeSheet($('#sheet-addapp')); renderApps(); toast(`${name} added to your Home Screen`);
 });
 function shade(hexc, amt) { const n = parseInt(hexc.slice(1), 16); const c = v => Math.max(0, Math.min(255, v + amt)); return '#' + [(n >> 16) & 255, (n >> 8) & 255, n & 255].map(v => c(v).toString(16).padStart(2, '0')).join(''); }
@@ -884,6 +886,85 @@ const pinEl = $('#pin');
 pinEl.addEventListener('input', () => { const v = pinEl.value.replace(/\D/g, '').slice(0, 8); pinEl.value = v; lock.code = v; renderDots(); if (v.length === 8) setTimeout(submitCode, 120); });
 pinEl.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); submitCode(); } });
 $('#lock-submit').addEventListener('click', submitCode);
+
+/* ------------------------------------------------- persistent storage & sync */
+const SYNC = { token: 'cc.ghToken', seen: 'cc.syncSeen' };
+const imgCache = new Map();
+const imgOf = a => a.image || (a.imageKey && imgCache.get(a.imageKey)) || null;
+function idbAssets() { return new Promise((res, rej) => { const r = indexedDB.open('cc-assets', 1); r.onupgradeneeded = () => r.result.createObjectStore('img'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
+async function idbPut(k, v) { const db = await idbAssets(); return new Promise((res, rej) => { const tx = db.transaction('img', 'readwrite'); tx.objectStore('img').put(v, k); tx.oncomplete = res; tx.onerror = () => rej(tx.error); }); }
+async function idbGet(k) { const db = await idbAssets(); return new Promise((res, rej) => { const q = db.transaction('img', 'readonly').objectStore('img').get(k); q.onsuccess = () => res(q.result || null); q.onerror = () => rej(q.error); }); }
+async function hydrateImages() {
+  for (const x of allApps()) if (x.imageKey && !imgCache.has(x.imageKey)) { const v = await idbGet(x.imageKey); if (v) imgCache.set(x.imageKey, v); }
+  renderApps();
+}
+const setSync = msg => { const el = $('#sync-status'); if (el) el.textContent = msg; };
+const syncRepo = () => ({ owner: location.hostname.split('.')[0], repo: location.pathname.split('/').filter(Boolean)[0] || 'command-center' });
+const bytesToB64 = u8 => { let s = ''; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(s); };
+const b64ToBytes = b => Uint8Array.from(atob(b.replace(/\s/g, '')), c => c.charCodeAt(0));
+function snapshotLS() {
+  const o = {}; [LS.apps, LS.hidden, LS.todo, LS.actions, LS.notes, LS.theme, LS.previews, LS.gemini, 'cc.printer'].forEach(k => { const v = localStorage.getItem(k); if (v != null) o[k] = v; });
+  return o;
+}
+async function snapshotImages() {
+  const out = {}; for (const x of lsGet(LS.apps, [])) if (x.imageKey) { const v = await idbGet(x.imageKey); if (v) out[x.imageKey] = v; }
+  return out;
+}
+async function sealState(obj) {
+  const iv = rand(12); const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, state.key, enc.encode(JSON.stringify(obj))));
+  const out = new Uint8Array(32 + ct.length); out.set(enc.encode('CCE1'), 0); out.set(state.salt, 4); out.set(iv, 20); out.set(ct, 32); return out;
+}
+let syncTimer = null, pushing = false;
+function scheduleSync() {
+  if (!state.unlocked || !lsGet(SYNC.token, '')) return;
+  clearTimeout(syncTimer); syncTimer = setTimeout(() => pushRemote().catch(e => setSync('Auto-save failed: ' + e.message)), 3000);
+}
+async function pushRemote() {
+  const tok = lsGet(SYNC.token, ''); if (!tok) throw new Error('add a GitHub token in Settings');
+  if (!state.key) throw new Error('unlock first');
+  if (pushing) return; pushing = true;
+  try {
+    const { owner, repo } = syncRepo(); const api = `https://api.github.com/repos/${owner}/${repo}/contents/data.enc`;
+    const h = { Authorization: 'Bearer ' + tok, Accept: 'application/vnd.github+json' };
+    setSync('Saving to GitHub…');
+    const g = await fetch(api, { headers: h, cache: 'no-store' });
+    if (!g.ok && g.status !== 404) throw new Error('GitHub ' + g.status + ' on read');
+    const sha = g.ok ? (await g.json()).sha : undefined;
+    const updated = new Date().toISOString();
+    const bytes = await sealState({ sync: true, updated, ls: snapshotLS(), images: await snapshotImages(), data: state.data });
+    const p = await fetch(api, { method: 'PUT', headers: { ...h, 'Content-Type': 'application/json' }, body: JSON.stringify({ message: 'Save: ' + updated.slice(0, 16).replace('T', ' '), content: bytesToB64(bytes), sha, branch: 'main' }) });
+    if (p.status === 409) { pushing = false; setSync('Newer copy found, loading it…'); await pullRemote(true); return; }
+    if (!p.ok) throw new Error('GitHub ' + p.status + ' on save');
+    lsSet(SYNC.seen, updated); setSync('Saved to GitHub at ' + new Date().toLocaleTimeString());
+  } finally { pushing = false; }
+}
+async function pullRemote(force) {
+  if (!location.hostname.endsWith('.github.io')) return false;
+  const tok = lsGet(SYNC.token, ''); const { owner, repo } = syncRepo(); let buf;
+  if (tok) {
+    const r = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/data.enc`, { headers: { Authorization: 'Bearer ' + tok, Accept: 'application/vnd.github+json' }, cache: 'no-store' });
+    if (!r.ok) return false; buf = b64ToBytes((await r.json()).content).buffer;
+  } else {
+    const r = await fetch(`https://${owner}.github.io/${repo}/data.enc?t=${Date.now()}`, { cache: 'no-store' });
+    if (!r.ok) return false; buf = await r.arrayBuffer();
+  }
+  if (!state.key) return false;
+  const { salt } = parseEnc(buf); if (hex(salt) !== hex(state.salt)) return false;
+  const remote = JSON.parse(dec.decode(await decryptBuf(buf, state.key)));
+  if (!remote.sync) return false;                       // plain publish.sh copy, nothing to merge
+  const seen = lsGet(SYNC.seen, ''); if (!force && seen && remote.updated <= seen) return false;
+  Object.entries(remote.ls || {}).forEach(([k, v]) => localStorage.setItem(k, v));
+  for (const [k, v] of Object.entries(remote.images || {})) await idbPut(k, v);
+  state.data = remote.data || state.data; lsSet(SYNC.seen, remote.updated);
+  imgCache.clear(); renderAll(); await hydrateImages();
+  setSync('Loaded latest saved copy from GitHub'); return true;
+}
+$('#sync-save').addEventListener('click', async () => {
+  const t = $('#sync-token').value.trim(); if (t) { lsSet(SYNC.token, t); $('#sync-token').value = ''; }
+  if (!lsGet(SYNC.token, '')) { setSync('Paste a GitHub token first'); return; }
+  try { await pushRemote(); toast('Saved forever. It will load on all your devices.'); } catch (e) { setSync('Save failed: ' + e.message); }
+});
+$('#sync-forget').addEventListener('click', () => { localStorage.removeItem(SYNC.token); setSync('Token removed from this browser'); });
 
 /* -------------------------------------------------------------------- init */
 async function init() {
