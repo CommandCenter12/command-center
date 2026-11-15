@@ -16,7 +16,7 @@ node encrypt.js
 
 # ---- git bootstrap ----------------------------------------------------------
 [ -d .git ] || git init -q -b main
-OWNER="$(gh api user --jq .login)"
+OWNER="$(git remote get-url origin 2>/dev/null | sed -E 's#.*github.com[:/]([^/]+)/.*#\1#')"; [ -n "$OWNER" ] || OWNER="$(gh api user --jq .login)"
 git config user.name  >/dev/null 2>&1 || git config user.name  "$OWNER"
 git config user.email >/dev/null 2>&1 || git config user.email "$OWNER@users.noreply.github.com"
 touch .nojekyll

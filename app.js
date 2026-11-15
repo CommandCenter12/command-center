@@ -275,8 +275,14 @@ async function bioUnwrapPasscode() {
   const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64u(rec.iv) }, wrapKey, unb64u(rec.wrapped));
   return dec.decode(plain);
 }
+function bioMsg(e) {
+  const m = { NotAllowedError: 'Face ID / Touch ID was cancelled or timed out. Use your PIN.', SecurityError: 'This browser blocked biometrics for this site. Use your PIN.', NotSupportedError: 'This browser does not support Face ID / Touch ID here. Use your PIN.', InvalidStateError: 'No biometric key on this device yet. Enroll it in Settings, or use your PIN.', AbortError: 'Biometric check stopped. Use your PIN.' };
+  if (e && m[e.name]) return m[e.name];
+  return e && e.message ? 'Biometrics unavailable (' + String(e.message).slice(0, 80) + '). Use your PIN.' : 'Biometrics unavailable. Use your PIN.';
+}
 async function bioUnlock() {
   if (lock.busy) return;
+  if (!bioAvailable) { lockHint.textContent = 'Face ID / Touch ID is not available in this browser. Use your PIN.'; return; }
   lock.busy = true; lockHint.textContent = ''; lockLabel.textContent = 'Face ID / Touch ID…';
   try {
     const code = await bioUnwrapPasscode();
@@ -286,7 +292,7 @@ async function bioUnlock() {
   } catch (e) {
     console.warn(e);
     lockLabel.textContent = 'Enter your 8-digit PIN';
-    lockHint.textContent = e.name === 'NotAllowedError' ? 'Biometric check cancelled — use the passcode.' : (e.message || 'Biometric unlock failed');
+    lockHint.textContent = bioMsg(e);
   } finally { lock.busy = false; }
 }
 
