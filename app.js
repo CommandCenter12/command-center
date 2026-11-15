@@ -739,6 +739,7 @@ function guideHtml(g) {
   const sec = (title, inner) => inner ? `<h3>${title}</h3>${inner}` : '';
   return `<h2>${esc(g.title)}</h2><div class="gmeta">${esc([g.course, g.source, g.created_at ? 'Made ' + new Date(g.created_at).toLocaleDateString() : ''].filter(Boolean).join(' · '))}</div>
     ${g.summary ? `<p>${esc(g.summary)}</p>` : ''}
+    ${(g.charts || []).map(svgBarChart).join('')}
     ${(g.el5 || []).length ? `<details class="el5"><summary>👶 Explain More (Like I'm a Baby)</summary>${g.el5.map(s => `<div class="step"><b>${esc(s.title)}</b>${esc(s.text)}</div>`).join('')}</details>` : ''}
     ${sec('🎯 Memorize this: key terms', (g.key_terms || []).length ? `<dl>${g.key_terms.map(t => `<dt>${esc(t.term)}</dt><dd>${esc(t.definition)}</dd>`).join('')}</dl>` : '')}
     ${sec('💡 Understand this: main concepts', (g.concepts || []).length ? `<ul>${g.concepts.map(c => `<li>${c.heading ? `<b>${esc(c.heading)}:</b> ` : ''}${esc(c.text)}</li>`).join('')}</ul>` : '')}
@@ -838,14 +839,18 @@ $('#set-reset').addEventListener('click', () => { [LS.apps, LS.hidden, LS.todo, 
 /* ------------------------------------------------------------------ render */
 const PRINTER_KEY = 'cc.printer';
 function printerCfg() { return lsGet(PRINTER_KEY, { ip: '', check: '' }); }
+let liveP = null;
 async function pollPrinter() {
   const cfg = printerCfg(); if (!cfg.ip) return;
   if (location.protocol === 'https:') { $('#printer-msg').textContent = 'The printer is on your home network. Browsers block that from a secure page, so open the app at http://localhost to see live numbers.'; return; }
   try {
     const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 4000);
     const r = await fetch(`http://${cfg.ip}:8898/`, { signal: ctl.signal, cache: 'no-store' }); clearTimeout(t);
-    const txt = await r.text();
-    $('#printer-msg').textContent = 'Printer answered on port 8898. Raw reply: ' + txt.slice(0, 120);
+    const txt = await r.text(); let j = null; try { j = JSON.parse(txt); } catch { /* not JSON */ }
+    if (j) {
+      liveP = { status: j.status || j.state, job: j.job || j.filename || j.job_name, progress: j.progress ?? j.percent, nozzle_c: j.nozzle_temp ?? j.nozzle, nozzle_target_c: j.nozzle_target ?? j.nozzle_target_temp, bed_c: j.bed_temp ?? j.bed, bed_target_c: j.bed_target ?? j.bed_target_temp, filament: j.filament || j.material, as_of: new Date().toISOString() };
+      renderPrinterStats(); $('#printer-msg').textContent = 'Live reading from ' + cfg.ip;
+    } else $('#printer-msg').textContent = 'Printer answered, but not with JSON. Raw reply: ' + txt.slice(0, 120);
   } catch (e) { $('#printer-msg').textContent = `No answer from ${cfg.ip}:8898. Check the IP, that this device is on the same Wi-Fi, and that the page is open at http://localhost.`; }
 }
 function renderPrinter() {
@@ -859,7 +864,7 @@ function renderPrinter() {
   pollPrinter();
 }
 function renderPrinterStats() {
-  const p = (state.data && state.data.printer) || {};
+  const p = liveP || (state.data && state.data.printer) || {};
   const known = !!p.status && p.status !== 'unknown';
   $('#printer-asof').textContent = p.as_of ? 'Read ' + relTime(p.as_of) : 'Waiting for reading';
   const v = (x, f) => (x == null || x === '' ? '—' : f ? f(x) : esc(x));
@@ -961,11 +966,43 @@ async function pullRemote(force) {
   setSync('Loaded latest saved copy from GitHub'); return true;
 }
 $('#sync-save').addEventListener('click', async () => {
-  const t = $('#sync-token').value.trim(); if (t) { lsSet(SYNC.token, t); $('#sync-token').value = ''; }
+  const t = $('#sync-token').value.trim(); if (t) { lsSet(SYNC.token, t); state.data = state.data || {}; state.data.settings = { ...(state.data.settings || {}), gh_token: t }; $('#sync-token').value = ''; }
   if (!lsGet(SYNC.token, '')) { setSync('Paste a GitHub token first'); return; }
   try { await pushRemote(); toast('Saved forever. It will load on all your devices.'); } catch (e) { setSync('Save failed: ' + e.message); }
 });
 $('#sync-forget').addEventListener('click', () => { localStorage.removeItem(SYNC.token); setSync('Token removed from this browser'); });
+
+/* ------------------------------------------------ charts, calendar export, printer */
+function svgBarChart(c) {
+  const W = 560, H = 260, P = 40, max = Math.max(...c.values.map(Math.abs)) || 1, bw = (W - 2 * P) / c.labels.length;
+  const bars = c.values.map((v, i) => {
+    const h = (Math.abs(v) / max) * (H - 2 * P), x = P + i * bw + bw * 0.15, y = H - P - h;
+    return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${(bw * 0.7).toFixed(1)}" height="${h.toFixed(1)}" rx="6" fill="${i % 2 ? '#328cc1' : '#0f4c5c'}"/><text x="${(x + bw * 0.35).toFixed(1)}" y="${(y - 6).toFixed(1)}" text-anchor="middle" font-size="12" fill="#0f4c5c">${v}</text><text x="${(x + bw * 0.35).toFixed(1)}" y="${H - P + 18}" text-anchor="middle" font-size="12" fill="#5e6e72">${esc(c.labels[i])}</text>`;
+  }).join('');
+  return `<figure class="chart"><figcaption>${esc(c.title)}</figcaption><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(c.title)}"><line x1="${P}" y1="${H - P}" x2="${W - P}" y2="${H - P}" stroke="#e0e6ed"/>${bars}</svg></figure>`;
+}
+const icsStamp = d => d.toISOString().replace(/[-:]/g, '').replace(/\.\d+/, '');
+function icsDate(d, allDay) { const p = n => String(n).padStart(2, '0'); const day = `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}`; return allDay ? day : `${day}T${p(d.getHours())}${p(d.getMinutes())}00`; }
+const icsText = s => String(s ?? '').replace(/\\/g, '\\\\').replace(/;/g, '\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
+function buildICS() {
+  const stamp = icsStamp(new Date()); const L = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Command Center//EN', 'CALSCALE:GREGORIAN', 'X-WR-CALNAME:Mohammad'];
+  for (const i of allItems()) {
+    const allDay = i.kind === 'assignment', s = i.date;
+    const e = allDay ? new Date(s.getFullYear(), s.getMonth(), s.getDate() + 1) : (i.end ? parseDate(i.end) : new Date(s.getTime() + 3600e3));
+    L.push('BEGIN:VEVENT', `UID:${icsText(i.id)}@command-center`, `DTSTAMP:${stamp}`,
+      allDay ? `DTSTART;VALUE=DATE:${icsDate(s, true)}` : `DTSTART:${icsDate(s, false)}`,
+      allDay ? `DTEND;VALUE=DATE:${icsDate(e, true)}` : `DTEND:${icsDate(e, false)}`,
+      `SUMMARY:${icsText((allDay ? 'Due: ' : '') + i.title)}`,
+      `DESCRIPTION:${icsText([i.course, i.teacher, i.notes].filter(Boolean).join('\n'))}`, 'END:VEVENT');
+  }
+  L.push('END:VCALENDAR'); return L.join('\r\n');
+}
+$('#ics-export').addEventListener('click', () => {
+  const url = URL.createObjectURL(new Blob([buildICS()], { type: 'text/calendar' }));
+  const a = document.createElement('a'); a.href = url; a.download = 'command-center-mohammad.ics'; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000); toast('Calendar file downloaded. Open it to add to Mohammad.');
+});
+setInterval(() => { if (state.unlocked && printerCfg().ip && location.protocol === 'http:') pollPrinter(); }, 15000);
 
 /* -------------------------------------------------------------------- init */
 async function init() {

@@ -561,3 +561,7 @@ body { background: var(--lgray); color: var(--ink); font-family: "Helvetica Neue
   --orange: #328cc1; --purple: #0f4c5c; --yellow: #328cc1; --blob1: #eaf3f9; --blob2: #eaf3f9; --blob3: #eaf3f9; --blob4: #eaf3f9;
 }
 .lock-title { letter-spacing: 0; text-transform: none; font-size: 20px; }
+
+.chart { margin: 12px 0; padding: 12px; border-radius: 14px; background: #fff; border: 1px solid #e0e6ed; }
+.chart figcaption { font-weight: 700; color: #0f4c5c; margin-bottom: 6px; font-size: 14px; }
+.chart svg { width: 100%; height: auto; display: block; }
