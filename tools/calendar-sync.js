@@ -25,7 +25,8 @@ end mkdate
 `;
 const parse = s => { if (!s) return null; if (/^\d{4}-\d{2}-\d{2}$/.test(s)) { const [y, m, d] = s.split('-').map(Number); return { y, m, d, h: 0, mi: 0, allDay: true }; } const dt = new Date(s); if (isNaN(dt)) return null; return { y: dt.getFullYear(), m: dt.getMonth() + 1, d: dt.getDate(), h: dt.getHours(), mi: dt.getMinutes(), allDay: false }; };
 const items = [];
-for (const a of data.assignments || []) { if (a.status === 'done') continue; const t = parse(a.due); if (t) items.push({ ...t, raw: a.title, title: `${a.type === 'exam' ? '📝 Exam' : '📚 Due'}: ${a.title}${a.course ? ` (${a.course})` : ''}`, desc: [a.course, a.source ? `Source: ${a.source}` : '', a.url || '', a.notes || ''].filter(Boolean).join('\n'), url: a.url || '', dur: 60 }); }
+const SKIP_COURSE = /hebrew/i;
+for (const a of data.assignments || []) { if (a.status === 'done' || SKIP_COURSE.test(a.course || '') || SKIP_COURSE.test(a.title || '')) continue; const t = parse(a.due); if (t) items.push({ ...t, raw: a.title, title: `${a.type === 'exam' ? '📝 Exam' : '📚 Due'}: ${a.title}${a.course ? ` (${a.course})` : ''}`, desc: [a.course, a.source ? `Source: ${a.source}` : '', a.url || '', a.notes || ''].filter(Boolean).join('\n'), url: a.url || '', dur: 60 }); }
 for (const e of data.events || []) { const t = parse(e.start); if (t) items.push({ ...t, raw: e.title, title: e.title, desc: [e.location, e.notes].filter(Boolean).join('\n'), url: e.url || '', dur: e.end ? Math.max(15, (new Date(e.end) - new Date(e.start)) / 60000) : 60 }); }
 const today = new Date(); today.setHours(0, 0, 0, 0);
 let created = 0, skipped = 0;
