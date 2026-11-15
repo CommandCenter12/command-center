@@ -565,3 +565,42 @@ body { background: var(--lgray); color: var(--ink); font-family: "Helvetica Neue
 .chart { margin: 12px 0; padding: 12px; border-radius: 14px; background: #fff; border: 1px solid #e0e6ed; }
 .chart figcaption { font-weight: 700; color: #0f4c5c; margin-bottom: 6px; font-size: 14px; }
 .chart svg { width: 100%; height: auto; display: block; }
+
+/* ===== Front page color: light blue accents ===== */
+body {
+  background:
+    radial-gradient(circle at 0% 0%, #cfe8f7 0%, rgba(207,232,247,0) 42%),
+    radial-gradient(circle at 100% 100%, #d4ebf8 0%, rgba(212,235,248,0) 40%),
+    #f4f7f6;
+  min-height: 100vh;
+}
+.greeting h1 {
+  background: linear-gradient(90deg, #0f4c5c 0%, #328cc1 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.subline { color: #328cc1; font-weight: 600; }
+.briefing {
+  background: linear-gradient(180deg, #e3f2fb 0%, #ffffff 65%);
+  border-top: 4px solid #328cc1;
+}
+.widget { border-top: 3px solid #8fd8ec; background: linear-gradient(180deg, #f1f9fd 0%, #ffffff 40%); }
+.printer, .goal-widget { background: linear-gradient(180deg, #eaf5fb 0%, #ffffff 45%); border-top: 3px solid #328cc1; }
+.goal-box, .box, .stat { background: linear-gradient(135deg, #ffffff 0%, #eaf5fb 100%); }
+.stat .v, .stat .k { color: #0f4c5c; }
+.card-head h2, .section-head h2 { color: #0f4c5c; }
+.section-head h2::before { content: ""; display: inline-block; width: 4px; height: 16px; background: #328cc1; border-radius: 2px; margin-right: 8px; vertical-align: -2px; }
+.bar-fill { background: linear-gradient(90deg, #328cc1, #8fd8ec); }
+.bar-track { background: #d9ecf7; }
+.pill { background: #eaf5fb; border-color: #bcd9ea; color: #0f4c5c; }
+.pill:hover { background: #d4ebf8; }
+.pill.accent { background: #0f4c5c; border-color: #0f4c5c; }
+.pill.accent:hover { background: #328cc1; border-color: #328cc1; }
+.chip { background: #eaf5fb; border-color: #bcd9ea; color: #0f4c5c; }
+.cmdbar { border: 1px solid #bcd9ea; box-shadow: 0 2px 10px rgba(50,140,193,.12); }
+.cmdbar:focus-within { border-color: #328cc1; box-shadow: 0 0 0 3px rgba(50,140,193,.2); }
+.model-seg button.active { background: #328cc1; }
+.tag.blue, .tag.orange { background: #d4ebf8; color: #0f4c5c; border-color: #8fd8ec; }
+.app-item .app-label { color: #0f4c5c; }
+.dock { background: linear-gradient(180deg, #ffffff, #eaf5fb); border-color: #bcd9ea; }
+.icon-btn { background: #eaf5fb; color: #0f4c5c; border-color: #bcd9ea; }
+.todo-list .check:hover { border-color: #328cc1; }
