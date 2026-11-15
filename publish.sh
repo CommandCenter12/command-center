@@ -4,6 +4,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 REPO_NAME="${CC_REPO_NAME:-command-center}"
+if git remote get-url origin >/dev/null 2>&1; then REPO_NAME="$(basename "$(git remote get-url origin)" .git)"; fi
 
 [ -f .passcode ] || { echo "✖ Missing .passcode (the 8-digit passcode). Create it: printf '09152012\n' > .passcode"; exit 1; }
 command -v node >/dev/null || { echo "✖ node is required"; exit 1; }
@@ -31,7 +32,7 @@ if ! git remote get-url origin >/dev/null 2>&1; then
 fi
 
 # ---- stage only public, non-sensitive files ---------------------------------
-PUBLIC=(index.html styles.css app.js README.md data.enc manifest.json sw.js icons .nojekyll .gitignore .salt encrypt.js publish.sh tools)
+PUBLIC=(index.html styles.css app.js README.md data.enc manifest.json sw.js assets icons .nojekyll .gitignore .salt encrypt.js publish.sh tools)
 for f in "${PUBLIC[@]}"; do [ -e "$f" ] && git add -A -- "$f"; done
 shopt -s nullglob; ENC=(screenshots/*.enc); shopt -u nullglob
 [ ${#ENC[@]} -gt 0 ] && git add -A -- "${ENC[@]}"

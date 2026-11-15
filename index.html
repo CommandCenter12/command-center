@@ -18,46 +18,30 @@
   <link rel="stylesheet" href="styles.css?v=2">
 </head>
 <body>
-  <div class="wallpaper" aria-hidden="true">
+  <div class="wallpaper" aria-hidden="true" hidden>
     <span class="blob b1"></span><span class="blob b2"></span><span class="blob b3"></span><span class="blob b4"></span>
   </div>
 
-  <!-- ============ iOS LOCK SCREEN ============ -->
-  <div id="lock" class="lock" role="dialog" aria-modal="true" aria-label="Lock screen">
-    <div class="lock-inner">
-      <div class="lock-title">Ai assistant</div>
-      <div class="lock-clock">
-        <div class="lock-time" id="lock-time">9:41</div>
-        <div class="lock-date" id="lock-date">Saturday, November 15</div>
-      </div>
-      <div class="lock-pass" id="lock-pass">
-        <div class="lock-label" id="lock-label">Enter Passcode</div>
-        <div class="dots" id="dots" aria-label="Passcode entry"></div>
-        <div class="keypad" id="keypad">
-          <button type="button" data-key="1"><span class="num">1</span><span class="letters">&nbsp;</span></button>
-          <button type="button" data-key="2"><span class="num">2</span><span class="letters">ABC</span></button>
-          <button type="button" data-key="3"><span class="num">3</span><span class="letters">DEF</span></button>
-          <button type="button" data-key="4"><span class="num">4</span><span class="letters">GHI</span></button>
-          <button type="button" data-key="5"><span class="num">5</span><span class="letters">JKL</span></button>
-          <button type="button" data-key="6"><span class="num">6</span><span class="letters">MNO</span></button>
-          <button type="button" data-key="7"><span class="num">7</span><span class="letters">PQRS</span></button>
-          <button type="button" data-key="8"><span class="num">8</span><span class="letters">TUV</span></button>
-          <button type="button" data-key="9"><span class="num">9</span><span class="letters">WXYZ</span></button>
-          <button type="button" class="key-bio" id="key-bio" aria-label="Unlock with Face ID or Touch ID" hidden>
-            <svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8V6a2 2 0 0 1 2-2h2"/><path d="M16 4h2a2 2 0 0 1 2 2v2"/><path d="M20 16v2a2 2 0 0 1-2 2h-2"/><path d="M8 20H6a2 2 0 0 1-2-2v-2"/><path d="M9 10v1"/><path d="M15 10v1"/><path d="M12 10v3.5a1 1 0 0 1-1 1"/><path d="M9.5 15.5c.7.8 1.5 1.1 2.5 1.1s1.8-.3 2.5-1.1"/></svg>
-          </button>
-          <button type="button" data-key="0"><span class="num">0</span><span class="letters">&nbsp;</span></button>
-          <button type="button" class="key-del" id="key-del" aria-label="Delete">
-            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 6H8l-5 6 5 6h13a1 1 0 0 0 1-1V7a1 1 0 0 0-1-1z"/><path d="M12 9l6 6"/><path d="M18 9l-6 6"/></svg>
-          </button>
-        </div>
-        <button type="button" class="bio-btn" id="bio-btn" hidden>
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8V6a2 2 0 0 1 2-2h2"/><path d="M16 4h2a2 2 0 0 1 2 2v2"/><path d="M20 16v2a2 2 0 0 1-2 2h-2"/><path d="M8 20H6a2 2 0 0 1-2-2v-2"/><path d="M9 10v1"/><path d="M15 10v1"/><path d="M12 10v3.5a1 1 0 0 1-1 1"/><path d="M9.5 15.5c.7.8 1.5 1.1 2.5 1.1s1.8-.3 2.5-1.1"/></svg>
-          <span>Unlock with Face ID / Touch ID</span>
-        </button>
-        <div class="lock-hint" id="lock-hint" aria-live="polite"></div>
-      </div>
+  <!-- ============ BANKING LOGIN ============ -->
+  <div id="lock" class="lock" role="dialog" aria-modal="true" aria-label="Command Center login">
+    <div class="lock-card">
+      <div class="lock-brand"><span class="brand-mark" aria-hidden="true">CC</span><div><div class="lock-title">Command Center</div><div class="lock-sub">Private portal</div></div></div>
+      <div class="lock-clock"><span id="lock-time"></span><span id="lock-date"></span></div>
+      <label class="pin-label" for="pin" id="lock-label">Enter your 8-digit PIN</label>
+      <input id="pin" class="pin-input" type="password" inputmode="numeric" autocomplete="off" maxlength="8" aria-label="PIN">
+      <div class="dots" id="dots" aria-hidden="true"></div>
+      <button type="button" class="lock-btn" id="lock-submit">Unlock</button>
+      <div class="lock-or"><span>or</span></div>
+      <button type="button" class="bio-btn" id="bio-btn">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8V6a2 2 0 0 1 2-2h2"/><path d="M16 4h2a2 2 0 0 1 2 2v2"/><path d="M20 16v2a2 2 0 0 1-2 2h-2"/><path d="M8 20H6a2 2 0 0 1-2-2v-2"/><path d="M9 10v1"/><path d="M15 10v1"/><path d="M12 10v3.5a1 1 0 0 1-1 1"/><path d="M9.5 15.5c.7.8 1.5 1.1 2.5 1.1s1.8-.3 2.5-1.1"/></svg>
+        <span>Unlock with Touch ID / Face ID</span>
+      </button>
+      <button type="button" id="key-bio" hidden></button>
+      <div class="lock-hint" id="lock-hint" aria-live="polite"></div>
+      <div class="enc-badge">🔒 AES-256-GCM encrypted vault. Decrypted only in this browser tab.</div>
     </div>
+    <div class="keypad" id="keypad" hidden></div>
+    <button type="button" id="key-del" hidden></button>
   </div>
 
   <!-- ============ DASHBOARD ============ -->

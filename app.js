@@ -146,7 +146,7 @@ function delKey() { if (lock.busy) return; lock.code = lock.code.slice(0, -1); r
 function lockFail(msg) {
   dotsEl.classList.add('shake');
   if (navigator.vibrate) navigator.vibrate([40, 40, 40]);
-  setTimeout(() => { dotsEl.classList.remove('shake'); lock.code = ''; renderDots(); lockLabel.textContent = msg || 'Wrong Passcode'; }, 480);
+  setTimeout(() => { dotsEl.classList.remove('shake'); lock.code = ''; renderDots(); if ($('#pin')) $('#pin').value = ''; lockLabel.textContent = msg || 'Wrong Passcode'; }, 480);
 }
 async function submitCode() {
   if (lock.busy || lock.code.length !== 8) return;
@@ -168,8 +168,8 @@ async function submitCode() {
   } finally { lock.busy = false; }
 }
 function showLock(mode = 'unlock') {
-  lock.mode = mode; lock.code = ''; renderDots();
-  lockLabel.textContent = mode === 'confirm' ? 'Confirm Passcode' : 'Enter Passcode';
+  lock.mode = mode; lock.code = ''; renderDots(); if ($('#pin')) $('#pin').value = '';
+  lockLabel.textContent = mode === 'confirm' ? 'Confirm Passcode' : 'Enter your 8-digit PIN';
   lockHint.textContent = '';
   lockEl.hidden = false; requestAnimationFrame(() => lockEl.classList.remove('hide'));
   document.body.classList.add('locked');
@@ -181,7 +181,7 @@ function hideLock() {
 }
 function askPasscode() { return new Promise(res => { lock.resolve = res; showLock('confirm'); }); }
 
-$('#keypad').addEventListener('click', e => {
+const keypadEl = $('#keypad'); if (keypadEl) keypadEl.addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
   if (b.dataset.key != null) pressKey(b.dataset.key);
   else if (b.id === 'key-del') delKey();
@@ -190,6 +190,7 @@ $('#keypad').addEventListener('click', e => {
 $('#bio-btn').addEventListener('click', bioUnlock);
 document.addEventListener('keydown', e => {
   if (lockEl.hidden || lockEl.classList.contains('hide')) return;
+  if (e.target && e.target.id === 'pin') return;
   if (e.metaKey || e.ctrlKey || e.altKey) return;
   if (/^[0-9]$/.test(e.key)) { pressKey(e.key); flashKey(e.key); e.preventDefault(); }
   else if (e.key === 'Backspace') { delKey(); e.preventDefault(); }
@@ -210,7 +211,7 @@ async function detectBio() {
 function refreshBioButtons() {
   const rec = bioRec();
   const ok = bioAvailable && rec && rec.wrapped && lock.mode === 'unlock';
-  $('#key-bio').hidden = !ok; $('#bio-btn').hidden = !ok;
+  $('#key-bio').hidden = true; $('#bio-btn').hidden = false;
 }
 function userIdBytes() { let id = lsGet(LS.userId, null); if (!id) { id = b64u(rand(16)); lsSet(LS.userId, id); } return unb64u(id); }
 async function hkdfKey(secret) {
@@ -284,7 +285,7 @@ async function bioUnlock() {
     onUnlocked(data);
   } catch (e) {
     console.warn(e);
-    lockLabel.textContent = 'Enter Passcode';
+    lockLabel.textContent = 'Enter your 8-digit PIN';
     lockHint.textContent = e.name === 'NotAllowedError' ? 'Biometric check cancelled — use the passcode.' : (e.message || 'Biometric unlock failed');
   } finally { lock.busy = false; }
 }
@@ -325,7 +326,7 @@ $('#btn-lock').addEventListener('click', () => lockNow());
 const mqLight = matchMedia('(prefers-color-scheme: light)');
 function applyTheme() {
   const pref = lsGet(LS.theme, 'auto');
-  const t = pref === 'auto' ? (mqLight.matches ? 'light' : 'dark') : pref;
+  const t = 'light';
   document.documentElement.setAttribute('data-theme', t);
   $$('#theme-seg button').forEach(b => b.classList.toggle('active', b.dataset.theme === pref));
 }
@@ -442,6 +443,8 @@ const DEFAULT_APPS = [
   { id: 'stocks', name: 'Robinhood Stocks', builtin: 'stocks', icon: '📈', bg: 'linear-gradient(145deg,#2c2c2e,#000)' },
   { id: 'guides', name: 'Study Guides', builtin: 'guides', icon: '📘', bg: 'linear-gradient(145deg,#6e6cff,#2d2b9a)' },
 ];
+const LOGOS = { livetop: 'assets/logos/livetop.png', gdocs: 'assets/logos/google-docs.png', gdrive: 'assets/logos/google-drive.png', horizons: 'assets/logos/horizons-academy.png', nayzak: 'assets/logos/horizons-courses.png', makerworld: 'assets/logos/makerworld.png', hmh: 'assets/logos/hmh-ed.png', flashforge: 'assets/logos/flashforge.png', stocks: 'assets/logos/robinhood.png' };
+DEFAULT_APPS.forEach(x => { if (LOGOS[x.id]) x.image = LOGOS[x.id]; });
 const DOCK_IDS = ['livetop', 'gdocs', 'stocks', 'guides'];
 function allApps() {
   const hidden = new Set(lsGet(LS.hidden, []));
@@ -451,7 +454,7 @@ function allApps() {
 }
 function iconHtml(a) {
   const inner = a.image ? `<img src="${a.image}" alt="">` : a.svg ? a.svg : /^https?:\/\//.test(a.icon || '') ? `<img src="${esc(a.icon)}" alt="">` : (a.icon && /\p{Extended_Pictographic}/u.test(a.icon)) ? `<span>${esc(a.icon)}</span>` : `<span class="glyph-text">${esc((a.icon || a.name || '?').slice(0, 2))}</span>`;
-  return `<div class="icon" style="background:${esc(a.bg || a.color || '#5e5ce6')}">${inner}</div>`;
+  return `<div class="icon${a.image ? ' logo' : ''}" style="background:${a.image ? '#ffffff' : esc(a.bg || a.color || '#5e5ce6')}">${inner}</div>`;
 }
 function appHtml(a, inDock) {
   const href = a.builtin ? '#' : a.url;
@@ -876,6 +879,11 @@ function renderGoalWidget() {
 }
 function renderAll() { renderGoalWidget(); renderPrinter(); renderHeader(); renderBriefing(); renderImportant(); renderTodo(); renderApps(); if ($('#sheet-stocks').classList.contains('open')) renderStocks(); }
 setInterval(() => { tickClock(); if (state.unlocked) renderHeader(); }, 15000);
+
+const pinEl = $('#pin');
+pinEl.addEventListener('input', () => { const v = pinEl.value.replace(/\D/g, '').slice(0, 8); pinEl.value = v; lock.code = v; renderDots(); if (v.length === 8) setTimeout(submitCode, 120); });
+pinEl.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); submitCode(); } });
+$('#lock-submit').addEventListener('click', submitCode);
 
 /* -------------------------------------------------------------------- init */
 async function init() {
