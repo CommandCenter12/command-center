@@ -1,0 +1,16 @@
+# ---- private: never leaves this machine unencrypted ----
+.passcode
+.env
+data.json
+screenshots/*.png
+screenshots/*.jpg
+screenshots/*.jpeg
+screenshots/*.webp
+screenshots/*.heic
+*.pending.json
+
+# ---- local noise ----
+.DS_Store
+node_modules/
+*.log
+.claude/
