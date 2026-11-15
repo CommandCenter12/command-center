@@ -292,6 +292,7 @@ async function bioUnlock() {
 
 /* ------------------------------------------------------------------ unlock */
 function onUnlocked(data, restored) {
+  const gt = state.data && state.data.settings && state.data.settings.gh_token; if (gt && !lsGet('cc.ghToken', '')) lsSet('cc.ghToken', gt);
   hydrateImages().catch(() => {}); pullRemote(false).catch(e => setSync('Cloud load skipped: ' + e.message));
   state.data = data || {}; state.unlocked = true;
   const sk = state.data.settings && state.data.settings.gemini_key; if (sk && !lsGet(LS.gemini, '')) lsSet(LS.gemini, sk);
