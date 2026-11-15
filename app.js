@@ -658,7 +658,8 @@ function goalHtml(sum) {
   const cur = +(g.current_balance ?? sum.total_value ?? 0);
   const done = Math.max(0, Math.min(100, (cur - start) / (target - start) * 100));
   const need = cur < target ? (Math.pow(target / Math.max(cur, 1), 1 / days) - 1) * 100 : 0;
-  const note = cur > target
+  const fund = cur < start;
+  const note = fund ? `Deposit ${money(start - cur)} into the MCP portfolio to start the ${money(start, 0)} plan.` : cur > target
     ? `Your tracked balance is ${money(cur)}, above the ${money(target)} goal. Set goal.current_balance in data.json to track a smaller sleeve.`
     : `You need about ${need.toFixed(2)}% a day, every trading day, to reach ${money(target)} in ${days} days. That pace is aggressive and not guaranteed.`;
   return `<div class="box goal-box"><h3>$${start} → $${target} in ${days} days</h3>
