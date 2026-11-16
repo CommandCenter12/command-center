@@ -819,7 +819,11 @@ async function askGemini(q) {
     const text = ((j.candidates || [])[0] || {}).content ? j.candidates[0].content.parts.map(p => p.text).join('') : 'No answer came back.';
     $('#cmd-title').textContent = 'Gemini'; $('#cmd-desc').textContent = 'Question: ' + q;
     $('#cmd-text').textContent = text; $('#cmd-share').hidden = !navigator.share; openSheet($('#sheet-cmd'));
-  } catch (e) { toast('Gemini error: ' + e.message, 4000); }
+  } catch (e) {
+    // Keep the error on screen (in the answer sheet) until the user closes it, instead of a 4-second toast.
+    $('#cmd-title').textContent = 'Gemini could not answer'; $('#cmd-desc').textContent = 'Question: ' + q;
+    $('#cmd-text').textContent = e.message; $('#cmd-share').hidden = true; openSheet($('#sheet-cmd'));
+  }
 }
 $('#printer-save').addEventListener('click', () => { lsSet(PRINTER_KEY, { ip: $('#printer-ip').value.trim(), check: $('#printer-check').value.trim() }); renderPrinter(); toast('Printer settings saved'); });
 $('#gemini-save').addEventListener('click', () => { const k = $('#gemini-key').value.trim(); if (!k) return; lsSet(LS.gemini, k); $('#gemini-key').value = ''; toast('Gemini key saved in this browser'); });

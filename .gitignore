@@ -14,3 +14,6 @@ screenshots/*.heic
 node_modules/
 *.log
 .claude/
+
+# ---- local config ----
+tools/printer.env
