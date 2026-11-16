@@ -812,10 +812,12 @@ async function askGemini(q) {
       r = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent', {
         method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key }, body
       });
-      if (r.status !== 429) break;
-      if (attempt < 3) { toast('Rate limit reached. Retrying in ' + (2 ** attempt) + 's…', 2000); await new Promise(res => setTimeout(res, 1000 * 2 ** attempt)); }
+      // 429 = rate limit, 503 = Google is busy ("high demand"). Both are temporary, so wait and retry.
+      if (r.status !== 429 && r.status !== 503) break;
+      if (attempt < 3) { toast((r.status === 503 ? 'Gemini is busy' : 'Rate limit reached') + '. Retrying in ' + (2 ** attempt) + 's…', 2000); await new Promise(res => setTimeout(res, 1000 * 2 ** attempt)); }
     }
     if (r.status === 429) throw new Error('Rate limit reached. Please wait a moment before sending another message.');
+    if (r.status === 503) throw new Error('Gemini is busy right now (high demand). Please try again in a minute.');
     const j = await r.json();
     if (!r.ok) throw new Error((j.error && j.error.message) || r.statusText);
     const text = ((j.candidates || [])[0] || {}).content ? j.candidates[0].content.parts.map(p => p.text).join('') : 'No answer came back.';
