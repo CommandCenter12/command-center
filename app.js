@@ -300,7 +300,10 @@ async function bioUnlock() {
 function onUnlocked(data, restored) {
   const gt = state.data && state.data.settings && state.data.settings.gh_token; if (gt && !lsGet('cc.ghToken', '')) lsSet('cc.ghToken', gt);
   hydrateImages().catch(() => {}); pullRemote(false).catch(e => setSync('Cloud load skipped: ' + e.message));
-  state.data = data || {}; state.unlocked = true;
+  // The synced file wraps the app data as { sync, updated, ls, images, data }. Unwrap it, or the lists stay empty
+  // whenever the cloud copy is not newer than this browser's last load.
+  const unwrapped = data && data.sync !== undefined && data.data ? data.data : data;
+  state.data = unwrapped || {}; state.unlocked = true;
   const sk = state.data.settings && state.data.settings.gemini_key; if (sk && !lsGet(LS.gemini, '')) lsSet(LS.gemini, sk);
   hideLock();
   $('#app').hidden = false;
