@@ -383,7 +383,9 @@ function renderImportant() {
     const n = dayDiff(i.date);
     const when = `<span class="when ${n <= 0 ? 'today' : n <= 2 ? 'soon' : ''}">${esc(relDay(i.date))}<br>${i.kind === 'event' ? esc(fmtTime(i.date)) : esc(i.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }))}</span>`;
     const sub = [i.course, i.location, i.source].filter(Boolean).join(' · ');
-    const act = i.kind === 'assignment' ? `<button type="button" class="pill tiny" data-guide="${esc(i.id)}" title="Make Study Guide">📘 Study guide</button>` : '';
+    const joinOk = i.kind === 'event' && typeof i.url === 'string' && /^https:\/\//.test(i.url);
+    const act = i.kind === 'assignment' ? `<button type="button" class="pill tiny" data-guide="${esc(i.id)}" title="Make Study Guide">📘 Study guide</button>`
+      : joinOk ? `<a class="pill tiny" href="${esc(i.url)}" target="_blank" rel="noopener" title="Open the meeting link">🎥 Join</a>` : '';
     return `<li><span class="bar ${i.kind === 'event' ? 'event' : prioClass(i.priority)}"></span>${when}<div class="body"><div class="title">${esc(i.title)}</div>${sub ? `<div class="sub">${esc(sub)}</div>` : ''}</div><div class="acts">${act}</div></li>`;
   }).join('') : '<li class="empty">Nothing urgent. Enjoy the calm ☀️</li>';
 }
