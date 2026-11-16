@@ -980,7 +980,10 @@ async function pullRemote(force) {
   const remote = JSON.parse(dec.decode(await decryptBuf(buf, state.key)));
   if (!remote.sync) return false;                       // plain publish.sh copy, nothing to merge
   const seen = lsGet(SYNC.seen, ''); if (!force && seen && remote.updated <= seen) return false;
+  // Keep the Gemini key this device has now: a saved copy from before a key change would otherwise put the old key back.
+  const localGemini = localStorage.getItem(LS.gemini);
   Object.entries(remote.ls || {}).forEach(([k, v]) => localStorage.setItem(k, v));
+  if (localGemini != null) localStorage.setItem(LS.gemini, localGemini);
   for (const [k, v] of Object.entries(remote.images || {})) await idbPut(k, v);
   state.data = remote.data || state.data; lsSet(SYNC.seen, remote.updated);
   imgCache.clear(); renderAll(); await hydrateImages();
