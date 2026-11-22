@@ -15,7 +15,7 @@
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icons/icon-180.png">
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
-  <link rel="stylesheet" href="styles.css?v=2">
+  <link rel="stylesheet" href="styles.css?v=3">
 </head>
 <body>
   <div class="wallpaper" aria-hidden="true" hidden>
@@ -273,7 +273,7 @@
           <h3>FlashForge printer</h3><p class="muted small">Your printer’s local IP (for example 192.168.1.50). Stored only in this browser.</p><div class="form-actions"><input id="printer-ip" type="text" placeholder="Printer IP" inputmode="decimal"><input id="printer-check" type="text" placeholder="Check code (optional)"><button type="button" class="pill accent" id="printer-save">Save printer</button></div></section>
         <section><h3>Save forever (cloud sync)</h3><p class="muted small">Your changes save to your GitHub repository, encrypted with your passcode, and load on every device. Use a fine-grained token limited to this repository with Contents: read and write. It is stored only in this browser.</p><div class="form-actions"><label class="file-pick" style="flex:1">GitHub Personal Access Token<input id="sync-token" type="password" placeholder="github_pat_…" autocomplete="off"></label><button type="button" class="pill accent" id="sync-save">Save &amp; Sync Forever</button><button type="button" class="pill" id="sync-forget">Forget token</button></div><p class="small muted" id="sync-status" aria-live="polite"></p></section>
         <section><h3>Apple Calendar (.ics)</h3><p class="muted small">Downloads deadlines and events for the "Mohammad" calendar. Re-importing updates existing entries instead of duplicating them.</p><div class="form-actions"><button type="button" class="pill accent" id="ics-export">Download .ics file</button></div></section>
-        <section><h3>OpenVerse AI key</h3><p class="muted small">Stored only in this browser. Never published. Used for quick questions.</p><div class="form-actions"><input id="openverse-key" type="password" placeholder="Paste your OpenVerse AI key" autocomplete="off"><button type="button" class="pill accent" id="openverse-save">Save key</button></div></section>
+        <section><h3>OpenVerse AI key</h3><p class="muted small">Stored only in this browser. Never published. Used for quick questions.</p><div class="form-actions"><input id="openverse-key" type="password" placeholder="Paste your OpenVerse AI key" autocomplete="off"><button type="button" class="pill accent" id="openverse-save">Save key</button></div><div class="form-actions"><a class="pill" id="openverse-create" href="https://commandcenter12.github.io/open-verse-ai/portal.html" target="_blank" rel="noopener">Create OpenVerse API key</a></div></section>
         <section><h3>Website previews</h3>
           <label class="switch"><input type="checkbox" id="set-previews" checked> <span>Show live website previews before opening an app</span></label>
         </section>
@@ -306,6 +306,6 @@
   <div id="lightbox" class="lightbox" hidden><img id="lb-img" alt="Screenshot"><div class="lb-cap" id="lb-cap"></div></div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-  <script src="app.js?v=2"></script>
+  <script src="app.js?v=3"></script>
 </body>
 </html>
