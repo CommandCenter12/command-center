@@ -14,7 +14,7 @@ const PBKDF2_ITER = 600000;
 const LOCK_AFTER_MS = 5 * 60 * 1000;
 const OWNER_FALLBACK = 'Mohammad';
 const APP_VERSION = '2.0.0';
-const LS = { apps: 'cc.customApps', hidden: 'cc.hiddenApps', todo: 'cc.todoState', theme: 'cc.theme', previews: 'cc.previews', actions: 'cc.actions', notes: 'cc.notes', bio: 'cc.bio', userId: 'cc.userId', gemini: 'cc.geminiKey', model: 'cc.model' };
+const LS = { apps: 'cc.customApps', hidden: 'cc.hiddenApps', todo: 'cc.todoState', theme: 'cc.theme', previews: 'cc.previews', actions: 'cc.actions', notes: 'cc.notes', bio: 'cc.bio', userId: 'cc.userId', gemini: 'cc.openverseKey', model: 'cc.model' };
 const SS_KEY = 'cc.session';
 
 const state = { data: null, key: null, salt: null, passcode: null, urls: [], lastActivity: Date.now(), idleTimer: null, unlocked: false, shotsLoaded: false };
@@ -304,7 +304,6 @@ function onUnlocked(data, restored) {
   // whenever the cloud copy is not newer than this browser's last load.
   const unwrapped = data && data.sync !== undefined && data.data ? data.data : data;
   state.data = unwrapped || {}; state.unlocked = true;
-  const sk = state.data.settings && state.data.settings.gemini_key; if (sk && !lsGet(LS.gemini, '')) lsSet(LS.gemini, sk);
   hideLock();
   $('#app').hidden = false;
   renderAll();
@@ -794,7 +793,7 @@ function runCommand(raw) {
   openCommand(t, 'Send to Claude');
 }
 const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
-let aiModel = lsGet(LS.model, 'claude');
+let aiModel = 'openverse';
 const setModelUI = () => $$('#model-seg button').forEach(b => b.classList.toggle('active', b.dataset.model === aiModel));
 setModelUI();
 $('#model-seg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; aiModel = b.dataset.model; lsSet(LS.model, aiModel); setModelUI(); });
@@ -802,38 +801,44 @@ const TOOL_CMD = /^(buy|sell|add|remind|todo|task|open|launch|go to|lock|stocks|
 $('#cmdbar').addEventListener('submit', e => {
   e.preventDefault(); const v = $('#cmd-input').value.trim(); $('#cmd-input').value = '';
   if (!v) return;
-  if (aiModel === 'gemini' && !TOOL_CMD.test(v)) askGemini(v); else runCommand(v);
+  if (aiModel === 'openverse' && !TOOL_CMD.test(v)) askOpenVerse(v); else runCommand(v);
 });
-async function askGemini(q) {
+const OVA_URL = 'https://open-verse-ai.boukeilehm.workers.dev';
+async function askOpenVerse(q) {
   const key = lsGet(LS.gemini, '');
-  if (!key) { toast('Add your Gemini API key in Settings first'); openSettings(); return; }
-  toast('Asking Gemini…', 8000);
+  if (!key) { toast('Add your OpenVerse AI key in Settings first'); openSettings(); return; }
+  toast('Asking OpenVerse AI…', 8000);
   try {
-    const body = JSON.stringify({ contents: [{ parts: [{ text: q }] }], systemInstruction: { parts: [{ text: 'Answer in clear, simple English for a 9th-grade student. Keep it short unless asked for more.' }] } });
     let r = null;
     for (let attempt = 0; attempt < 4; attempt++) {
-      r = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent', {
-        method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key }, body
+      r = await fetch(OVA_URL + '/v1/ask', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
+        body: JSON.stringify({ question: q, top_k: 3 })
       });
-      // 429 = rate limit, 503 = Google is busy ("high demand"). Both are temporary, so wait and retry.
+      // 429 = rate limit (Retry-After tells us how long), 503 = busy. Wait and retry.
       if (r.status !== 429 && r.status !== 503) break;
-      if (attempt < 3) { toast((r.status === 503 ? 'Gemini is busy' : 'Rate limit reached') + '. Retrying in ' + (2 ** attempt) + 's…', 2000); await new Promise(res => setTimeout(res, 1000 * 2 ** attempt)); }
+      if (attempt < 3) {
+        const wait = (+r.headers.get('Retry-After')) || (2 ** attempt);
+        toast('OpenVerse AI is busy. Retrying in ' + wait + 's…', 2000);
+        await new Promise(res => setTimeout(res, wait * 1000));
+      }
     }
-    if (r.status === 429) throw new Error('Rate limit reached. Please wait a moment before sending another message.');
-    if (r.status === 503) throw new Error('Gemini is busy right now (high demand). Please try again in a minute.');
-    const j = await r.json();
+    const j = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error((j.error && j.error.message) || r.statusText);
-    const text = ((j.candidates || [])[0] || {}).content ? j.candidates[0].content.parts.map(p => p.text).join('') : 'No answer came back.';
-    $('#cmd-title').textContent = 'Gemini'; $('#cmd-desc').textContent = 'Question: ' + q;
-    $('#cmd-text').textContent = text; $('#cmd-share').hidden = !navigator.share; openSheet($('#sheet-cmd'));
+    const lines = [j.answer || (j.general_unavailable ? 'No answer: ' + j.general_unavailable : 'No answer came back.')];
+    if (j.confidence) lines.push('', 'Confidence: ' + j.confidence);
+    if (Array.isArray(j.sources) && j.sources.length) lines.push('', 'Sources:', ...j.sources.map(s => '[' + s.ref + '] ' + s.title + (s.section ? ' — ' + s.section : '') + (s.url ? '\n' + s.url : '')));
+    if (j.disclaimer) lines.push('', j.disclaimer);
+    $('#cmd-title').textContent = 'OpenVerse AI'; $('#cmd-desc').textContent = 'Question: ' + q;
+    $('#cmd-text').textContent = lines.join('\n'); $('#cmd-share').hidden = !navigator.share; openSheet($('#sheet-cmd'));
   } catch (e) {
-    // Keep the error on screen (in the answer sheet) until the user closes it, instead of a 4-second toast.
-    $('#cmd-title').textContent = 'Gemini could not answer'; $('#cmd-desc').textContent = 'Question: ' + q;
+    // Keep the error on screen (in the answer sheet) until the user closes it.
+    $('#cmd-title').textContent = 'OpenVerse AI could not answer'; $('#cmd-desc').textContent = 'Question: ' + q;
     $('#cmd-text').textContent = e.message; $('#cmd-share').hidden = true; openSheet($('#sheet-cmd'));
   }
 }
 $('#printer-save').addEventListener('click', () => { lsSet(PRINTER_KEY, { ip: $('#printer-ip').value.trim(), check: $('#printer-check').value.trim() }); renderPrinter(); toast('Printer settings saved'); });
-$('#gemini-save').addEventListener('click', () => { const k = $('#gemini-key').value.trim(); if (!k) return; lsSet(LS.gemini, k); $('#gemini-key').value = ''; toast('Gemini key saved in this browser'); });
+$('#openverse-save').addEventListener('click', () => { const k = $('#openverse-key').value.trim(); if (!k) return; lsSet(LS.gemini, k); $('#openverse-key').value = ''; toast('OpenVerse AI key saved in this browser'); });
 $('#cmd-chips').addEventListener('click', e => { const c = e.target.closest('.chip'); if (c) runCommand(c.dataset.cmd); });
 
 /* ---------------------------------------------------------------- settings */

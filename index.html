@@ -79,10 +79,10 @@
       </div>
     </section>
 
-    <div class="model-seg" id="model-seg" role="group" aria-label="Answer engine"><button type="button" data-model="claude">Claude · tools</button><button type="button" data-model="gemini">Gemini · questions</button></div>
+    <div class="model-seg" id="model-seg" role="group" aria-label="Answer engine"><button type="button" data-model="openverse" class="active">OpenVerse AI · questions</button></div>
     <form class="cmdbar glass" id="cmdbar" autocomplete="off">
       <span class="cmd-glyph" aria-hidden="true">⌘</span>
-      <input id="cmd-input" type="text" placeholder="Ask Claude… “Buy $200 of NVDA” · “Add physics homework to my list”" aria-label="Quick command" enterkeyhint="send">
+      <input id="cmd-input" type="text" placeholder="Ask a question, or try “Buy $200 of NVDA”" aria-label="Quick command" enterkeyhint="send">
       <button type="submit" class="pill accent">Send</button>
     </form>
     <div class="cmd-chips" id="cmd-chips">
@@ -273,7 +273,7 @@
           <h3>FlashForge printer</h3><p class="muted small">Your printer’s local IP (for example 192.168.1.50). Stored only in this browser.</p><div class="form-actions"><input id="printer-ip" type="text" placeholder="Printer IP" inputmode="decimal"><input id="printer-check" type="text" placeholder="Check code (optional)"><button type="button" class="pill accent" id="printer-save">Save printer</button></div></section>
         <section><h3>Save forever (cloud sync)</h3><p class="muted small">Your changes save to your GitHub repository, encrypted with your passcode, and load on every device. Use a fine-grained token limited to this repository with Contents: read and write. It is stored only in this browser.</p><div class="form-actions"><label class="file-pick" style="flex:1">GitHub Personal Access Token<input id="sync-token" type="password" placeholder="github_pat_…" autocomplete="off"></label><button type="button" class="pill accent" id="sync-save">Save &amp; Sync Forever</button><button type="button" class="pill" id="sync-forget">Forget token</button></div><p class="small muted" id="sync-status" aria-live="polite"></p></section>
         <section><h3>Apple Calendar (.ics)</h3><p class="muted small">Downloads deadlines and events for the "Mohammad" calendar. Re-importing updates existing entries instead of duplicating them.</p><div class="form-actions"><button type="button" class="pill accent" id="ics-export">Download .ics file</button></div></section>
-        <section><h3>Gemini API key</h3><p class="muted small">Stored only in this browser. Never published. Used for quick questions.</p><div class="form-actions"><input id="gemini-key" type="password" placeholder="Paste your Gemini API key" autocomplete="off"><button type="button" class="pill accent" id="gemini-save">Save key</button></div></section>
+        <section><h3>OpenVerse AI key</h3><p class="muted small">Stored only in this browser. Never published. Used for quick questions.</p><div class="form-actions"><input id="openverse-key" type="password" placeholder="Paste your OpenVerse AI key" autocomplete="off"><button type="button" class="pill accent" id="openverse-save">Save key</button></div></section>
         <section><h3>Website previews</h3>
           <label class="switch"><input type="checkbox" id="set-previews" checked> <span>Show live website previews before opening an app</span></label>
         </section>
