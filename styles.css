@@ -464,6 +464,16 @@ table.hold tr.detail td { white-space: normal; background: rgba(127, 127, 127, .
 .bar-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--accent), var(--green)); transition: width .6s ease; }
 .goal-box { margin-bottom: 12px; }
 .goal-plan { margin-top: 12px; }
+.verdict { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 12px; margin: 6px 0 10px; border: 1px solid rgba(255, 159, 10, .35); background: rgba(255, 159, 10, .12); }
+.verdict.buy { border-color: rgba(48, 209, 88, .4); background: rgba(48, 209, 88, .14); }
+.verdict b { font-size: 15px; }
+.rules-list li { margin-bottom: 4px; }
+@media (max-width: 640px) {
+  table.swing { min-width: 0; }
+  table.swing thead { display: none; }
+  table.swing tr { display: block; padding: 10px 0; border-bottom: 1px solid rgba(127, 127, 127, .18); }
+  table.swing td { display: block; padding: 2px 0; border: 0; white-space: normal; }
+}
 .el5 { margin: 12px 0; padding: 12px 14px; border-radius: 16px; background: rgba(255, 214, 10, .12); border: 1px solid rgba(255, 214, 10, .35); }
 .el5 summary { cursor: pointer; font-weight: 700; }
 .el5 .step { margin: 8px 0; }

@@ -654,36 +654,51 @@ function detailHtml(r) {
       <div class="form-actions"><button type="button" class="pill tiny accent" data-ticket="${esc(r.ticker)}">Build order ticket</button><a class="pill tiny" target="_blank" rel="noopener" href="https://robinhood.com/stocks/${esc(r.ticker)}">Open on Robinhood</a></div></div>
   </div>`;
 }
-const GOAL_PLAN = { start: 500, target: 1000, days: 30 };
-const PLAN_TICKERS = ['MU', 'AMD', 'NVDA', 'AMZN', 'META'];
+/* Trading-bot alignment: rules and scans come from ~/trading-bot (CLAUDE.md + journal), synced into data.trading_bot. */
+const BOT_RULES = { budget: 500, max_risk: 10, min_rr: 2, window_et: '11:30 AM – 2:30 PM ET' };
+const bot = () => (state.data && state.data.trading_bot) || null;
 function goalHtml(sum) {
-  const g = (state.data && state.data.goal) || {};
-  const start = g.start_balance ?? GOAL_PLAN.start, target = g.target ?? GOAL_PLAN.target, days = g.days ?? GOAL_PLAN.days;
+  const g = (state.data && state.data.goal) || {}; const b = bot() || {}; const ex = b.expectancy || {};
+  const start = g.start_balance ?? BOT_RULES.budget, target = g.monthly_profit_goal ?? 1000;
   const cur = +(g.current_balance ?? sum.total_value ?? 0);
-  const done = Math.max(0, Math.min(100, (cur - start) / (target - start) * 100));
-  const need = cur < target ? (Math.pow(target / Math.max(cur, 1), 1 / days) - 1) * 100 : 0;
+  const made = +(g.month_realized ?? 0);
+  const done = Math.max(0, Math.min(100, made / target * 100));
   const fund = cur < start;
-  const note = fund ? `Deposit ${money(start - cur)} into the MCP portfolio to start the ${money(start, 0)} plan.` : cur > target
-    ? `Your tracked balance is ${money(cur)}, above the ${money(target)} goal. Set goal.current_balance in data.json to track a smaller sleeve.`
-    : `You need about ${need.toFixed(2)}% a day, every trading day, to reach ${money(target)} in ${days} days. That pace is aggressive and not guaranteed.`;
-  return `<div class="box goal-box"><h3>$${start} → $${target} in ${days} days</h3>
-    <div class="kv"><span>Tracked balance</span><b>${money(cur)}</b></div>
+  const winner = BOT_RULES.max_risk * BOT_RULES.min_rr;
+  const note = fund ? `Deposit ${money(start - cur)} into the MCP portfolio to start the ${money(start, 0)} plan.`
+    : `${money(target, 0)}/month on ${money(cur, 0)} is a ${Math.round(target / Math.max(cur, 1) * 100)}% monthly return. At ${money(BOT_RULES.max_risk, 0)} max risk a 2:1 winner makes about ${money(winner, 0)} (${(winner / target * 100).toFixed(0)}% of the goal), so the goal isn't reachable without more capital. The rules never raise risk to chase it.`;
+  return `<div class="box goal-box"><h3>${money(target, 0)}/month goal · ${money(cur, 0)} account</h3>
+    <div class="kv"><span>Realized this month</span><b class="${made >= 0 ? 'up' : 'down'}">${money(made)}</b></div>
     <div class="bar-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(done)}"><div class="bar-fill" style="width:${done.toFixed(1)}%"></div></div>
-    <div class="small muted">${Math.round(done)}% of the way from ${money(start, 0)} to ${money(target, 0)}. ${esc(note)}</div>
-    ${actionPlanHtml()}</div>`;
+    <div class="small muted">${done.toFixed(1)}% of ${money(target, 0)}. ${esc(note)}</div>
+    ${ex.weekly_low != null ? `<div class="kv" style="margin-top:8px"><span>Realistic expectancy</span><b>${money(ex.weekly_low, 0)}–${money(ex.weekly_high, 0)}/week · ${money(ex.monthly_low, 0)}–${money(ex.monthly_high, 0)}/month</b></div>` : ''}
+    ${swingPlanHtml()}</div>`;
 }
-function actionPlanHtml() {
-  const rows = stockRows().filter(r => PLAN_TICKERS.includes(r.ticker));
-  if (!rows.length) return '';
-  const body = rows.map(r => {
-    const low = (r.levels && r.levels.low20) || r.price;
-    const buy = low * 1.01, sell = buy * 1.02, stop = low * 0.97;
-    return `<tr><td><b>${esc(r.ticker)}</b></td><td>${money(r.price)}</td><td>${money(buy)}</td><td>${money(sell)}</td><td>${money(stop)}</td></tr>`;
-  }).join('');
-  return `<div class="goal-plan"><h3>Mid-day dip plan</h3>
-    <p class="small muted">Buy with a limit near the dip. Sell with a limit 2% above your buy, or at the close, whichever comes first. Do not hold overnight. You place every order yourself.</p>
-    <div class="tbl-wrap"><table class="hold"><thead><tr><th>Ticker</th><th>Price</th><th>Buy limit</th><th>Sell limit (+2%)</th><th>Exit if below</th></tr></thead><tbody>${body}</tbody></table></div>
-    <p class="disclaimer">Levels come from each stock's 20-day low. Momentum tech stocks can move 5 to 10% in a day, so a 2% gain is a target, not a promise. This is a margin account under $25,000, so frequent same-day round trips can trigger the pattern day trader rule.</p></div>`;
+function swingPlanHtml() {
+  const b = bot();
+  const rules = `<ul class="plain small rules-list">
+      <li><b>Halal gate first</b> (AAOIFI): permissible business, debt &lt; 30% and cash &lt; 30% of market cap, non-permissible income &lt; 5%. Unverified = reject.</li>
+      <li><b>${money(BOT_RULES.budget, 0)} cash, no margin, whole shares.</b> Max loss ${money(BOT_RULES.max_risk, 0)} per trade (2%). Reward:risk ≥ ${BOT_RULES.min_rr}:1. Hard stop on every trade.</li>
+      <li><b>Swing, not day trade:</b> hold overnight or longer, so no PDT round trips. Buy window ${BOT_RULES.window_et}.</li>
+      <li><b>Insiders:</b> block heavy CEO/insider selling or bad news; prefer open-market insider buying.</li>
+      <li><b>Preview only.</b> Claude scores and previews. You say YES and place the order yourself.</li></ul>`;
+  if (!b) return `<div class="goal-plan"><h3>Halal swing plan</h3>${rules}<p class="small muted">No trading-bot scan synced yet. Tap “Run Halal scan”.</p></div>`;
+  const s = b.last_scan || {};
+  const buying = /BUY/i.test(s.verdict || '') && !/NO TRADE/i.test(s.verdict || '');
+  const rows = (b.watchlist || []).map(w => `<tr>
+      <td><b>${esc(w.ticker)}</b>${w.priority ? ' <span class="tag green">priority</span>' : ''}<div class="sub">${esc(w.status || 'WATCH')}</div></td>
+      <td>${money(w.price)}<div class="sub">ATR ${num(w.atr_pct, 1)}%</div></td>
+      <td>${money(w.entry)} / <span class="down">${money(w.stop)}</span> / <span class="up">${money(w.target)}</span><div class="sub">${esc(String(w.qty))} sh · ${money(w.qty * w.entry, 0)}</div></td>
+      <td><span class="up">+${money(w.reward)}</span> / <span class="down">−${money(w.risk)}</span><div class="sub">${num(w.goal_pct, 2)}% of goal</div></td>
+      <td class="small">${esc(w.insider || '')}</td></tr>`).join('');
+  const rejects = Object.entries(b.rejected || {}).map(([t, why]) => `<b>${esc(t)}</b> ${esc(why)}`).join(' · ');
+  return `<div class="goal-plan"><h3>Halal swing plan</h3>
+    <div class="verdict ${buying ? 'buy' : 'hold'}"><b>${esc(s.verdict || '—')}</b><span class="small">${esc(s.reason || '')}</span><span class="small muted">Scan ${s.at ? esc(relTime(s.at)) : '—'}${s.universe ? ` · ${esc(String(s.universe))} scanned → ${esc(String(s.halal_pass))} Halal pass` : ''}</span></div>
+    ${rows ? `<div class="tbl-wrap"><table class="hold swing"><thead><tr><th>Watching</th><th>Price</th><th>Entry / stop / target</th><th>+$ / −$</th><th>Insiders</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="small muted">Nothing on the watchlist.</p>'}
+    ${rejects ? `<p class="small muted" style="margin-top:8px">Rejected: ${rejects}</p>` : ''}
+    ${(b.events || []).length ? `<h4 style="margin:12px 0 4px">This week</h4><ul class="plain small">${b.events.map(e => `<li><b>${esc(e.when)}</b> ${esc(e.what)}</li>`).join('')}</ul>` : ''}
+    <details class="small" style="margin-top:8px"><summary>Rules</summary>${rules}</details>
+    <p class="disclaimer">Plans are conditional: each needs a pullback that holds and a bounce confirmed inside the window. The Halal screen is a filter, not a fatwa. Not investment advice. You place every order.</p></div>`;
 }
 function fmtCap(n) { n = +n; if (n >= 1e12) return '$' + (n / 1e12).toFixed(2) + 'T'; if (n >= 1e9) return '$' + (n / 1e9).toFixed(1) + 'B'; if (n >= 1e6) return '$' + (n / 1e6).toFixed(0) + 'M'; return money(n, 0); }
 $('#pane-holdings').addEventListener('click', e => {
@@ -778,6 +793,8 @@ $('#cmd-share').addEventListener('click', () => navigator.share({ title: 'For Cl
 function runCommand(raw) {
   const t = raw.trim(); if (!t) return; const l = t.toLowerCase(); let m;
   if ((m = t.match(/^(?:add|remind me to|todo:?|task:?)\s+(.+?)(?:\s+to my (?:list|to-?do(?: list)?|reminders|tasks))?\.?$/i))) { addTodo(cap(m[1].trim())); toast('Added to your list'); return; }
+  if (/^(run\s+)?(halal|swing|trading[- ]bot)\s+scan/.test(l)) { openCommand(HALAL_SCAN_CMD, 'Run Halal scan'); return; }
+  if (/^buy\b/.test(l)) toast('Manual ticket: run the Halal scan first so it\'s screened and sized to $10 max risk', 4200);
   if ((m = l.match(/^(buy|sell)\s+\$\s?([\d,.]+)\s*(?:(?:worth\s+)?of\s+)?([a-z.]{1,6})\b(?:.*?limit\s+\$?([\d.]+))?/))) { prefillTicket({ side: m[1], unit: 'dollars', amount: m[2].replace(/,/g, ''), symbol: m[3], type: m[4] ? 'limit' : 'market', limit: m[4], build: true }); switchTab('ticket'); return; }
   if ((m = l.match(/^(buy|sell)\s+([\d.]+)\s+(?:shares?\s+(?:of\s+)?)?([a-z.]{1,6})\b(?:.*?limit\s+\$?([\d.]+))?/))) { prefillTicket({ side: m[1], unit: 'shares', amount: m[2], symbol: m[3], type: m[4] ? 'limit' : 'market', limit: m[4], build: true }); switchTab('ticket'); return; }
   if ((m = l.match(/^(buy|sell)\s+([a-z.]{1,6})\b/))) { prefillTicket({ side: m[1], symbol: m[2] }); switchTab('ticket'); return; }
@@ -793,11 +810,12 @@ function runCommand(raw) {
   openCommand(t, 'Send to Claude');
 }
 const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+const HALAL_SCAN_CMD = 'Read ~/trading-bot/CLAUDE.md and journal/scans.md, then run the full pipeline: universe scan → Halal gate → chart → insiders/news → 3-question scorecard. Preview only, never place orders. Log it in the journal, then sync the result into the Command Center (data.trading_bot) and ask me before publishing.';
 let aiModel = 'openverse';
 const setModelUI = () => $$('#model-seg button').forEach(b => b.classList.toggle('active', b.dataset.model === aiModel));
 setModelUI();
 $('#model-seg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; aiModel = b.dataset.model; lsSet(LS.model, aiModel); setModelUI(); });
-const TOOL_CMD = /^(buy|sell|add|remind|todo|task|open|launch|go to|lock|stocks|portfolio|robinhood|settings|preferences|dark|light|auto|make me a study guide|study guide)/i;
+const TOOL_CMD = /^(run halal|halal|swing scan|buy|sell|add|remind|todo|task|open|launch|go to|lock|stocks|portfolio|robinhood|settings|preferences|dark|light|auto|make me a study guide|study guide)/i;
 $('#cmdbar').addEventListener('submit', e => {
   e.preventDefault(); const v = $('#cmd-input').value.trim(); $('#cmd-input').value = '';
   if (!v) return;
@@ -913,7 +931,7 @@ function renderPrinterStats() {
 function renderGoalWidget() {
   const s = (state.data && state.data.stocks) || {}; const n = +(s.day_trades_5d || 0);
   $('#goal-body').innerHTML = goalHtml({ total_value: (s.summary || {}).total_value }) +
-    `<div class="box" style="margin-top:12px"><h3>PDT counter (5 business days)</h3><div class="kv"><span>Day trades used</span><b class="${n >= 3 ? 'down' : ''}">${n} of 3</b></div><p class="small muted" style="margin:6px 0 0">${n >= 3 ? 'Limit reached. Another same-day round trip would flag your margin account.' : 'Accounts under $25,000 may make 3 day trades per rolling 5 business days.'}</p></div>`;
+    `<div class="box" style="margin-top:12px"><h3>PDT counter (5 business days)</h3><div class="kv"><span>Day trades used</span><b class="${n >= 3 ? 'down' : ''}">${n} of 3</b></div><p class="small muted" style="margin:6px 0 0">${n >= 3 ? 'Limit reached. Another same-day round trip would flag the account.' : 'Accounts under $25,000 may make 3 day trades per rolling 5 business days. The swing plan holds overnight, so it shouldn\'t use any.'}</p></div>`;
 }
 function renderAll() { renderGoalWidget(); renderPrinter(); renderHeader(); renderBriefing(); renderImportant(); renderTodo(); renderApps(); if ($('#sheet-stocks').classList.contains('open')) renderStocks(); }
 setInterval(() => { tickClock(); if (state.unlocked) renderHeader(); }, 15000);
