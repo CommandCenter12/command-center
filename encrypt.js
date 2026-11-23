@@ -47,6 +47,10 @@ for (const f of fs.readdirSync(shotsDir)) if (f.endsWith('.enc') && !keep.has(f)
 // ---- data.json → data.enc ----------------------------------------------------
 const dataPath = path.join(ROOT, 'data.json');
 const data = fs.existsSync(dataPath) ? JSON.parse(fs.readFileSync(dataPath, 'utf8')) : {};
+// Never publish API keys/tokens, even encrypted: they live in .secrets.local.json and each browser's own storage.
+if (data.settings) for (const k of ['gh_token', 'gemini_key', 'openverse_key']) {
+  if (k in data.settings) { delete data.settings[k]; console.log(`• Left ${k} out of data.enc (keys are per-device only)`); }
+}
 data.stocks = data.stocks || {};
 const prev = new Map((data.stocks.screenshots || []).map(s => [s.file, s]));
 data.stocks.screenshots = shots.map(s => ({ ...s, label: (prev.get(s.file) || {}).label || s.label }));

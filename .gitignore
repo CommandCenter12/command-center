@@ -17,3 +17,6 @@ node_modules/
 
 # ---- local config ----
 tools/printer.env
+
+# ---- secrets: per-device only, never published ----
+.secrets.local.json

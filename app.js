@@ -298,12 +298,11 @@ async function bioUnlock() {
 
 /* ------------------------------------------------------------------ unlock */
 function onUnlocked(data, restored) {
-  const gt = state.data && state.data.settings && state.data.settings.gh_token; if (gt && !lsGet('cc.ghToken', '')) lsSet('cc.ghToken', gt);
   hydrateImages().catch(() => {}); pullRemote(false).catch(e => setSync('Cloud load skipped: ' + e.message));
   // The synced file wraps the app data as { sync, updated, ls, images, data }. Unwrap it, or the lists stay empty
   // whenever the cloud copy is not newer than this browser's last load.
   const unwrapped = data && data.sync !== undefined && data.data ? data.data : data;
-  state.data = unwrapped || {}; state.unlocked = true;
+  state.data = stripSecrets(unwrapped || {}); state.unlocked = true;
   hideLock();
   $('#app').hidden = false;
   renderAll();
@@ -943,6 +942,13 @@ $('#lock-submit').addEventListener('click', submitCode);
 
 /* ------------------------------------------------- persistent storage & sync */
 const SYNC = { token: 'cc.ghToken', seen: 'cc.syncSeen' };
+// API keys and tokens are per-device only (localStorage). They are never written into data.enc,
+// because data.enc is public ciphertext guarded by an 8-digit PIN.
+const SECRET_SETTINGS = ['gh_token', 'gemini_key', 'openverse_key'];
+function stripSecrets(d) {
+  if (d && d.settings) { const s = { ...d.settings }; SECRET_SETTINGS.forEach(k => delete s[k]); return { ...d, settings: s }; }
+  return d;
+}
 const imgCache = new Map();
 const imgOf = a => a.image || (a.imageKey && imgCache.get(a.imageKey)) || null;
 function idbAssets() { return new Promise((res, rej) => { const r = indexedDB.open('cc-assets', 1); r.onupgradeneeded = () => r.result.createObjectStore('img'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
@@ -957,7 +963,7 @@ const syncRepo = () => ({ owner: location.hostname.split('.')[0], repo: location
 const bytesToB64 = u8 => { let s = ''; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(s); };
 const b64ToBytes = b => Uint8Array.from(atob(b.replace(/\s/g, '')), c => c.charCodeAt(0));
 function snapshotLS() {
-  const o = {}; [LS.apps, LS.hidden, LS.todo, LS.actions, LS.notes, LS.theme, LS.previews, LS.gemini, 'cc.printer'].forEach(k => { const v = localStorage.getItem(k); if (v != null) o[k] = v; });
+  const o = {}; [LS.apps, LS.hidden, LS.todo, LS.actions, LS.notes, LS.theme, LS.previews, 'cc.printer'].forEach(k => { const v = localStorage.getItem(k); if (v != null) o[k] = v; });
   return o;
 }
 async function snapshotImages() {
@@ -985,7 +991,7 @@ async function pushRemote(attempt = 1) {
     if (!g.ok && g.status !== 404) throw new Error(ghErr(g.status));
     const sha = g.ok ? (await g.json()).sha : undefined;
     const updated = new Date().toISOString();
-    const bytes = await sealState({ sync: true, updated, ls: snapshotLS(), images: await snapshotImages(), data: state.data });
+    const bytes = await sealState({ sync: true, updated, ls: snapshotLS(), images: await snapshotImages(), data: stripSecrets(state.data) });
     const p = await fetch(api, { method: 'PUT', headers: { ...h, 'Content-Type': 'application/json' }, body: JSON.stringify({ message: 'Save: ' + updated.slice(0, 16).replace('T', ' '), content: bytesToB64(bytes), sha, branch: 'main' }) });
     if (p.status === 409 && attempt < 4) { pushing = false; setSync('Save conflict, retrying…'); await new Promise(r => setTimeout(r, 900 * attempt)); return pushRemote(attempt + 1); }
     if (p.status === 409) throw new Error('GitHub kept changing. Try again in a moment.');
@@ -1008,17 +1014,15 @@ async function pullRemote(force) {
   const remote = JSON.parse(dec.decode(await decryptBuf(buf, state.key)));
   if (!remote.sync) return false;                       // plain publish.sh copy, nothing to merge
   const seen = lsGet(SYNC.seen, ''); if (!force && seen && remote.updated <= seen) return false;
-  // Keep the Gemini key this device has now: a saved copy from before a key change would otherwise put the old key back.
-  const localGemini = localStorage.getItem(LS.gemini);
-  Object.entries(remote.ls || {}).forEach(([k, v]) => localStorage.setItem(k, v));
-  if (localGemini != null) localStorage.setItem(LS.gemini, localGemini);
+  // Keys are per-device: never take one from a saved copy (older copies may still carry them).
+  Object.entries(remote.ls || {}).forEach(([k, v]) => { if (k !== LS.gemini && k !== SYNC.token) localStorage.setItem(k, v); });
   for (const [k, v] of Object.entries(remote.images || {})) await idbPut(k, v);
-  state.data = remote.data || state.data; lsSet(SYNC.seen, remote.updated);
+  state.data = stripSecrets(remote.data || state.data); lsSet(SYNC.seen, remote.updated);
   imgCache.clear(); renderAll(); await hydrateImages();
   setSync('Loaded latest saved copy from GitHub'); return true;
 }
 $('#sync-save').addEventListener('click', async () => {
-  const t = $('#sync-token').value.trim(); if (t) { lsSet(SYNC.token, t); state.data = state.data || {}; state.data.settings = { ...(state.data.settings || {}), gh_token: t }; $('#sync-token').value = ''; }
+  const t = $('#sync-token').value.trim(); if (t) { lsSet(SYNC.token, t); $('#sync-token').value = ''; }
   if (!lsGet(SYNC.token, '')) { setSync('Paste a GitHub token first'); return; }
   try { await pushRemote(); toast('Saved forever. It will load on all your devices.'); } catch (e) { setSync('Save failed: ' + e.message); }
 });

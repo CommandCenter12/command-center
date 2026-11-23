@@ -32,6 +32,10 @@ browser after the lock screen.
   output (hardware-bound; Safari 18+/iOS 18+/Chrome 116+). On browsers without PRF the wrap key is a
   non-extractable key in IndexedDB gated by the biometric ceremony. Enrollment never leaves the device;
   the passcode always works as a fallback.
+* **API keys and tokens are per-device only.** The GitHub sync token and the OpenVerse/Gemini key live in each
+  browser's own storage (paste once per device in Settings) and, on the Mac, in the gitignored `.secrets.local.json`.
+  `encrypt.js`, cloud sync and unlock all strip them, so they never go into `data.enc`. Older commits of `data.enc`
+  may still contain them encrypted, so rotate any key that was published before Nov 23, 2026.
 * **Limits to know**: the only secret is an 8-digit passcode. The published ciphertext is protected by
   600k PBKDF2 rounds, which slows brute force but cannot make 10⁸ combinations unbreakable against a
   determined attacker with GPUs. Treat the repo as "private enough", not as a vault; a private repo
