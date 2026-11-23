@@ -900,6 +900,48 @@ async function pollPrinter() {
     } else $('#printer-msg').textContent = 'Printer answered, but not with JSON. Raw reply: ' + txt.slice(0, 120);
   } catch (e) { $('#printer-msg').textContent = `No answer from ${cfg.ip}:8898. Check the IP, that this device is on the same Wi-Fi, and that the page is open at http://localhost.`; }
 }
+/* ------------------------------------------------ Mac mini status (heartbeat) */
+// Public, non-sensitive heartbeat pushed by ~/trading-bot/scripts/mac_mini_heartbeat.py to the
+// `status` branch every 10 minutes and after each scan. No decryption needed.
+const MAC_STATUS_URL = 'https://raw.githubusercontent.com/CommandCenter12/command-center/status/status.json';
+const MAC_ONLINE_MIN = 20, MAC_STALE_MIN = 60;
+let macStatus = null, macError = null, macFetchedAt = 0;
+function macState(s) {
+  if (!s || !s.updated_at) return { key: 'unknown', label: 'No heartbeat yet' };
+  const mins = (Date.now() - Date.parse(s.updated_at)) / 60000;
+  if (!(mins >= -5)) return { key: 'unknown', label: 'Unknown' };
+  if (mins <= MAC_ONLINE_MIN) return { key: 'online', label: 'Online' };
+  if (mins <= MAC_STALE_MIN) return { key: 'stale', label: 'Stale' };
+  return { key: 'offline', label: 'Offline' };
+}
+async function fetchMacStatus() {
+  try {
+    const r = await fetch(MAC_STATUS_URL + '?t=' + Math.floor(Date.now() / 60000), { cache: 'no-store' });
+    if (r.status === 404) { macStatus = null; macError = null; }
+    else if (!r.ok) throw new Error('HTTP ' + r.status);
+    else { macStatus = await r.json(); macError = null; }
+  } catch (e) { macError = e.message || 'unreachable'; }
+  macFetchedAt = Date.now();
+  renderMacStatus();
+}
+function renderMacStatus() {
+  if (!$('#mac-body')) return;
+  if (!macFetchedAt) { $('#mac-asof').textContent = 'Checking…'; $('#mac-body').innerHTML = ''; fetchMacStatus(); return; }
+  const s = macStatus, st = macState(s), scan = s && s.last_scan;
+  $('#mac-asof').textContent = s && s.updated_at ? 'Heartbeat ' + relTime(s.updated_at) : (macError ? 'Could not load status' : 'Waiting for first heartbeat');
+  $('#mac-body').innerHTML =
+    `<div class="mac-status ${st.key}"><span class="mac-dot" aria-hidden="true"></span><span class="mac-label">${esc(st.label)}</span>` +
+    `<span class="muted small">${s ? esc(s.device || 'Mac') + (s.uptime_hours != null ? ' · up ' + esc(s.uptime_hours) + ' h' : '') : ''}</span></div>` +
+    `<div class="p-grid">
+      <div class="stat"><div class="k">Last heartbeat</div><div class="v" style="font-size:16px">${s && s.updated_at ? esc(new Date(s.updated_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })) : '—'}</div><div class="d">${s ? esc(s.trigger || '') : ''}</div></div>
+      <div class="stat"><div class="k">Last scan</div><div class="v" style="font-size:16px">${scan ? esc(scan.time_et + ' ET') : '—'}</div><div class="d">${scan ? esc(scan.at ? relTime(scan.at) : scan.date) : 'No scan logged'}</div></div>
+      <div class="stat"><div class="k">Scan result</div><div class="v" style="font-size:15px;font-weight:700">${scan ? esc(scan.verdict) : '—'}</div></div>
+    </div>` +
+    (macError ? `<p class="muted small" style="margin:8px 0 0">Status check failed (${esc(macError)}). Showing the last known state.</p>` : '') +
+    `<p class="muted small" style="margin:8px 0 0">Online = heartbeat within ${MAC_ONLINE_MIN} min · Stale = within ${MAC_STALE_MIN} min · Offline = older.</p>`;
+}
+setInterval(() => { if (state.unlocked) fetchMacStatus(); }, 60000);
+
 function renderPrinter() {
   const cfg = printerCfg(); const p = (state.data && state.data.printer) || {};
   if (!cfg.ip) {
@@ -932,7 +974,7 @@ function renderGoalWidget() {
   $('#goal-body').innerHTML = goalHtml({ total_value: (s.summary || {}).total_value }) +
     `<div class="box" style="margin-top:12px"><h3>PDT counter (5 business days)</h3><div class="kv"><span>Day trades used</span><b class="${n >= 3 ? 'down' : ''}">${n} of 3</b></div><p class="small muted" style="margin:6px 0 0">${n >= 3 ? 'Limit reached. Another same-day round trip would flag the account.' : 'Accounts under $25,000 may make 3 day trades per rolling 5 business days. The swing plan holds overnight, so it shouldn\'t use any.'}</p></div>`;
 }
-function renderAll() { renderGoalWidget(); renderPrinter(); renderHeader(); renderBriefing(); renderImportant(); renderTodo(); renderApps(); if ($('#sheet-stocks').classList.contains('open')) renderStocks(); }
+function renderAll() { renderGoalWidget(); renderPrinter(); renderMacStatus(); renderHeader(); renderBriefing(); renderImportant(); renderTodo(); renderApps(); if ($('#sheet-stocks').classList.contains('open')) renderStocks(); }
 setInterval(() => { tickClock(); if (state.unlocked) renderHeader(); }, 15000);
 
 const pinEl = $('#pin');
