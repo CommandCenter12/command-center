@@ -5,7 +5,7 @@
 #  3. Claude runs the morning-sync skill for the parts that need it, WITHOUT publishing.
 # Publishing is never automatic: run ./publish.sh yourself after you check the changes.
 set -u
-PROJECT="$HOME/Desktop/ai-assistant"
+PROJECT="$HOME/Developer/ai-assistant"
 LOG="$HOME/Library/Logs/command-center-morning.log"
 cd "$PROJECT" || exit 1
 mkdir -p "$(dirname "$LOG")"
