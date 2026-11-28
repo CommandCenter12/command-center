@@ -1,0 +1,15 @@
+{
+  "v": 1,
+  "device": "Mac mini",
+  "updated_at": "2026-11-28T18:10:01Z",
+  "awake": true,
+  "uptime_hours": 3.4,
+  "trigger": "schedule",
+  "last_scan": {
+    "date": "2026-11-27",
+    "time_et": "13:33",
+    "at": "2026-11-27T18:33:00Z",
+    "verdict": "NO TRADE"
+  },
+  "last_decision": null
+}
