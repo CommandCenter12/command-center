@@ -967,8 +967,28 @@ function renderPrinterStats() {
       <div class="stat"><div class="k">Filament</div><div class="v" style="font-size:18px">${v(p.filament)}</div></div>
     </div>
     <div class="small muted" style="margin-top:12px">Progress ${known && p.status === 'printing' ? pct + '%' : '—'}</div>
-    <div class="bar-track"><div class="bar-fill" style="width:${known && p.status === 'printing' ? pct : 0}%"></div></div>`;
+    <div class="bar-track"><div class="bar-fill" style="width:${known && p.status === 'printing' ? pct : 0}%"></div></div>
+    <div class="form-actions" style="margin-top:12px">${printerControls(p, known)}</div>`;
 }
+// Pause / resume / cancel. They only work through the Mac's printer bridge, so they show only when a live reading exists.
+function printerControls(p, known) {
+  if (!known || !liveP) return '';
+  if (p.status === 'printing') return '<button type="button" class="pill" data-printer="pause">Pause print</button><button type="button" class="pill danger" data-printer="cancel">Cancel print</button>';
+  if (p.status === 'paused') return '<button type="button" class="pill accent" data-printer="resume">Resume print</button><button type="button" class="pill danger" data-printer="cancel">Cancel print</button>';
+  return '';
+}
+$('#printer-body').addEventListener('click', async e => {
+  const b = e.target.closest('[data-printer]'); if (!b) return;
+  const act = b.dataset.printer;
+  if (act === 'cancel' && !confirm('Cancel this print? The printer stops and the job cannot be resumed.')) return;
+  b.disabled = true;
+  try {
+    const r = await fetch(`http://localhost:8765/${act}${act === 'cancel' ? '?confirm=yes' : ''}`, { method: 'POST', cache: 'no-store' });
+    const j = await r.json();
+    toast(j.ok ? `Printer: ${act} sent` : 'Printer did not respond: ' + (j.error || 'unknown error'));
+  } catch (err) { toast('Printer bridge is not running on this Mac'); }
+  finally { b.disabled = false; pollPrinter(); }
+});
 function renderGoalWidget() {
   const s = (state.data && state.data.stocks) || {}; const n = +(s.day_trades_5d || 0);
   $('#goal-body').innerHTML = goalHtml({ total_value: (s.summary || {}).total_value }) +

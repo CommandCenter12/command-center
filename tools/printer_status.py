@@ -69,3 +69,18 @@ if __name__ == '__main__':
     nozzle_key = 'nozzle_c'; bed_key = 'bed_c'
     p[nozzle_key] = p.pop('nozzle_temp'); p[bed_key] = p.pop('bed_temp')
     print(json.dumps({'printer': p}))
+
+
+# Print controls over the same TCP port (FlashForge Adventurer command set).
+CONTROL = {'pause': b'~M25', 'resume': b'~M24', 'cancel': b'~M26'}
+
+def control_printer(action, ip=None, port=None):
+    """Send pause / resume / cancel. Returns the printer's raw reply."""
+    if action not in CONTROL:
+        raise ValueError('unknown action: ' + str(action))
+    env = load_env()
+    ip = ip or env.get('PRINTER_IP')
+    port = int(port or env.get('PRINTER_PORT', 8899))
+    if not ip:
+        raise RuntimeError('no printer IP: set PRINTER_IP in tools/printer.env')
+    return ask(ip, port, CONTROL[action])
