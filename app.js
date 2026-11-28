@@ -889,16 +889,16 @@ function printerCfg() { return lsGet(PRINTER_KEY, { ip: '', check: '' }); }
 let liveP = null;
 async function pollPrinter() {
   const cfg = printerCfg(); if (!cfg.ip) return;
-  if (location.protocol === 'https:') { $('#printer-msg').textContent = 'The printer is on your home network. Browsers block that from a secure page, so open the app at http://localhost to see live numbers.'; return; }
   try {
     const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 4000);
-    const r = await fetch(`http://${cfg.ip}:8898/`, { signal: ctl.signal, cache: 'no-store' }); clearTimeout(t);
+    // The printer is reached through the bridge running on this Mac (tools/printer-bridge.py, port 8765).
+    const r = await fetch('http://localhost:8765/', { signal: ctl.signal, cache: 'no-store' }); clearTimeout(t);
     const txt = await r.text(); let j = null; try { j = JSON.parse(txt); } catch { /* not JSON */ }
     if (j) {
       liveP = { status: j.status || j.state, job: j.job || j.filename || j.job_name, progress: j.progress ?? j.percent, nozzle_c: j.nozzle_temp ?? j.nozzle, nozzle_target_c: j.nozzle_target ?? j.nozzle_target_temp, bed_c: j.bed_temp ?? j.bed, bed_target_c: j.bed_target ?? j.bed_target_temp, filament: j.filament || j.material, as_of: new Date().toISOString() };
       renderPrinterStats(); $('#printer-msg').textContent = 'Live reading from ' + cfg.ip;
-    } else $('#printer-msg').textContent = 'Printer answered, but not with JSON. Raw reply: ' + txt.slice(0, 120);
-  } catch (e) { $('#printer-msg').textContent = `No answer from ${cfg.ip}:8898. Check the IP, that this device is on the same Wi-Fi, and that the page is open at http://localhost.`; }
+    } else $('#printer-msg').textContent = 'Bridge answered, but not with JSON. Raw reply: ' + txt.slice(0, 120);
+  } catch (e) { $('#printer-msg').textContent = `No live reading. Make sure the printer is on and the Mac's printer bridge is running (tools/printer-bridge.py).`; }
 }
 /* ------------------------------------------------ Mac mini status (heartbeat) */
 // Public, non-sensitive heartbeat pushed by ~/trading-bot/scripts/mac_mini_heartbeat.py to the
@@ -1100,7 +1100,7 @@ $('#ics-export').addEventListener('click', () => {
   const a = document.createElement('a'); a.href = url; a.download = 'command-center-mohammad.ics'; document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 2000); toast('Calendar file downloaded. Open it to add to Mohammad.');
 });
-setInterval(() => { if (state.unlocked && printerCfg().ip && location.protocol === 'http:') pollPrinter(); }, 15000);
+setInterval(() => { if (state.unlocked && printerCfg().ip) pollPrinter(); }, 15000);
 
 /* -------------------------------------------------------------------- init */
 function ghErr(s) { if (s === 401 || s === 403) return 'token rejected (' + s + '). Create a new fine-grained token with Contents: Read and write for this repository, then paste it in Settings'; if (s === 404) return 'repository or file not found (404)'; return 'GitHub error ' + s; }

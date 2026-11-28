@@ -16,34 +16,12 @@ echo "=== $(date '+%Y-%m-%d %H:%M:%S') daily run start"
 node tools/calendar-sync.js --dry-run || echo "calendar dry run failed"
 node tools/calendar-sync.js || echo "calendar sync failed"
 
-# 2. Printer: read status from the printer's static IP (set in tools/printer.env)
+# 2. Printer: read status over the printer's TCP command port (IP and port in tools/printer.env)
 if [ -f tools/printer.env ]; then
-  # shellcheck disable=SC1091
-  . tools/printer.env
-  RAW=$(curl -s -m 6 "http://${PRINTER_IP}:8898/") || RAW=""
-  if [ -n "$RAW" ]; then
-    printf '%s' "$RAW" | python3 -c '
-import json, sys
-from datetime import datetime, timezone
-try:
-    j = json.load(sys.stdin)
-except Exception:
-    sys.exit(1)
-frag = {"printer": {
-    "name": "FlashForge Adventurer 5X",
-    "status": j.get("status") or j.get("state") or "unknown",
-    "job": j.get("job") or j.get("filename") or j.get("job_name"),
-    "progress": j.get("progress") or j.get("percent"),
-    "nozzle_c": j.get("nozzle_temp") or j.get("nozzle"),
-    "bed_c": j.get("bed_temp") or j.get("bed"),
-    "filament": j.get("filament") or j.get("material"),
-    "as_of": datetime.now(timezone.utc).isoformat(),
-}}
-json.dump(frag, open("/tmp/cc-printer-fragment.json", "w"))
-' && node tools/merge-data.js /tmp/cc-printer-fragment.json && echo "printer updated" \
-      || echo "printer answered but not with JSON"
+  if python3 tools/printer_status.py > /tmp/cc-printer-fragment.json 2>>"$LOG"; then
+    node tools/merge-data.js /tmp/cc-printer-fragment.json && echo "printer updated"
   else
-    echo "printer did not answer at ${PRINTER_IP}:8898 (kept last reading)"
+    echo "printer did not answer (kept last reading)"
   fi
 else
   echo "tools/printer.env missing; skipping printer"
