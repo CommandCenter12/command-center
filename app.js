@@ -407,15 +407,26 @@ function renderTodo() {
     const sub = [t.course, due].filter(Boolean).join(' · ');
     const flag = t.priority === 'high' ? '<span class="flag" title="High priority">🚩</span>' : '';
     const guide = (t.kind === 'assignment' || t.source === 'assignment') && !t.done ? `<button type="button" class="pill tiny" data-guide="${esc(t.id)}">📘 Study guide</button>` : '';
-    return `<li class="${t.done ? 'done' : ''}" data-id="${esc(t.id)}"><button type="button" class="check ${t.done ? 'on' : ''}" aria-label="Toggle done">${t.done ? '✓' : ''}</button><div class="body"><div class="title">${esc(t.title)} ${flag}</div>${sub ? `<div class="sub">${sub}</div>` : ''}</div><div class="acts">${guide}<button type="button" class="del" aria-label="Remove">✕</button></div></li>`;
+    return `<li class="${t.done ? 'done' : ''}" data-id="${esc(t.id)}"><button type="button" class="check ${t.done ? 'on' : ''}" aria-label="Toggle done">${t.done ? '✓' : ''}</button><div class="body"><div class="title">${esc(t.title)} ${flag}</div>${sub ? `<div class="sub">${sub}</div>` : ''}</div><div class="acts">${guide}<button type="button" class="cross" aria-label="Cross out" title="Cross out">✕</button><button type="button" class="trash" aria-label="Delete this and its study guide" title="Delete this and its study guide">🗑</button></div></li>`;
   }).join('') : '<li class="empty">No reminders yet.</li>';
 }
 $('#todo-list').addEventListener('click', e => {
   const li = e.target.closest('li[data-id]'); if (!li) return;
   const id = li.dataset.id; const ts = todoState();
   if (e.target.closest('.check')) { if (ts.done[id]) delete ts.done[id]; else ts.done[id] = Date.now(); lsSet(LS.todo, ts); renderTodo(); renderImportant(); renderBriefing(); }
-  else if (e.target.closest('.del')) { ts.removed[id] = true; ts.custom = ts.custom.filter(c => c.id !== id); lsSet(LS.todo, ts); renderTodo(); toast('Removed'); }
+  else if (e.target.closest('.cross')) { ts.done[id] = Date.now(); lsSet(LS.todo, ts); renderTodo(); renderImportant(); renderBriefing(); }
+  else if (e.target.closest('.trash')) { deleteTodoAndGuide(id); }
 });
+function deleteTodoAndGuide(id) {
+  if (!confirm('Delete this and its study guide? This cannot be undone.')) return;
+  const ts = todoState(); ts.removed[id] = true; ts.custom = ts.custom.filter(c => c.id !== id); lsSet(LS.todo, ts);
+  if (state.data) {
+    const before = (state.data.study_guides || []).length;
+    state.data.study_guides = (state.data.study_guides || []).filter(g => g.assignment_id !== id && g.id !== id && g.todo_id !== id);
+    if (state.data.study_guides.length !== before) scheduleSync();
+  }
+  renderTodo(); renderImportant(); renderBriefing(); renderGuides(); toast('Deleted');
+}
 function addTodo(title, due, priority) {
   if (!title) return;
   const ts = todoState();
@@ -760,6 +771,19 @@ function renderGuides(activeId) {
   const active = g.find(x => x.id === activeId) || g[0];
   $('#guide-view').innerHTML = active ? guideHtml(active) : '<p class="muted">Pick a study guide on the left, or press “Make Study Guide” on any assignment.</p>';
 }
+// A simple picture for each guide: the title in the middle, its key terms around it.
+function guideArt(g) {
+  const terms = (g.key_terms || []).slice(0, 6); if (!terms.length) return '';
+  const W = 480, H = 300, cx = W / 2, cy = H / 2, R = 105;
+  const nodes = terms.map((t, i) => { const a = -Math.PI / 2 + i * 2 * Math.PI / terms.length; return { x: cx + R * 1.35 * Math.cos(a), y: cy + R * Math.sin(a), label: t.term }; });
+  const short = s => (s || '').length > 18 ? s.slice(0, 17) + '…' : (s || '');
+  return `<figure class="guide-art"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Concept map for ${esc(g.title)}">
+    ${nodes.map(n => `<line x1="${cx}" y1="${cy}" x2="${n.x.toFixed(1)}" y2="${n.y.toFixed(1)}" stroke="#8fd8ec" stroke-width="2"/>`).join('')}
+    <circle cx="${cx}" cy="${cy}" r="48" fill="#0f4c5c"/>
+    <text x="${cx}" y="${cy + 5}" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">${esc(short(g.title))}</text>
+    ${nodes.map(n => `<circle cx="${n.x.toFixed(1)}" cy="${n.y.toFixed(1)}" r="34" fill="#e8f7fb" stroke="#328cc1" stroke-width="2"/><text x="${n.x.toFixed(1)}" y="${(n.y + 4).toFixed(1)}" text-anchor="middle" fill="#0f4c5c" font-size="11" font-weight="600">${esc(short(n.label))}</text>`).join('')}
+  </svg><figcaption>Concept map: the main terms around the topic.</figcaption></figure>`;
+}
 function guideHtml(g) {
   const sec = (title, inner) => inner ? `<h3>${title}</h3>${inner}` : '';
   return `<h2>${esc(g.title)}</h2><div class="gmeta">${esc([g.course, g.source, g.created_at ? 'Made ' + new Date(g.created_at).toLocaleDateString() : ''].filter(Boolean).join(' · '))}</div>
@@ -769,14 +793,15 @@ function guideHtml(g) {
     ${sec('🎯 Memorize this: key terms', (g.key_terms || []).length ? `<dl>${g.key_terms.map(t => `<dt>${esc(t.term)}</dt><dd>${esc(t.definition)}</dd>`).join('')}</dl>` : '')}
     ${sec('💡 Understand this: main concepts', (g.concepts || []).length ? `<ul>${g.concepts.map(c => `<li>${c.heading ? `<b>${esc(c.heading)}:</b> ` : ''}${esc(c.text)}</li>`).join('')}</ul>` : '')}
     ${sec('Worked examples', (g.examples || []).length ? g.examples.map(x => `<div class="example"><b>${esc(x.title)}</b><ol>${(x.steps || []).map(s => `<li>${esc(s)}</li>`).join('')}</ol></div>`).join('') : '')}
-    ${sec('Self-check', (g.practice || []).length ? g.practice.map((q, i) => `<details><summary>${i + 1}. ${esc(q.q)}</summary><p>${esc(q.a)}</p></details>`).join('') : '')}
+    ${guideArt(g)}
+    ${sec('Self-check', (!/arabic/i.test(g.course || '') && (g.practice || []).length) ? g.practice.map((q, i) => `<details><summary>${i + 1}. ${esc(q.q)}</summary><p>${esc(q.a)}</p></details>`).join('') : '')}
     ${g.tips ? sec('Tips', `<p>${esc(g.tips)}</p>`) : ''}`;
 }
 $('#guides-list').addEventListener('click', e => { const b = e.target.closest('[data-g]'); if (b) renderGuides(b.dataset.g); });
 $('#guides-request').addEventListener('click', () => openCommand(studyGuideCommand(null), 'Request a study guide'));
 function studyGuideCommand(a) {
   const what = a ? `"${a.title}"${a.course ? ` for ${a.course}` : ''}${a.due ? ` (due ${a.due})` : ''}` : 'my next assignment';
-  return `Make me a study guide for ${what}.\n\nUse the /morning-sync study-guide procedure: open HMH Ed, find the matching textbook chapter/lesson, read the sections that cover this topic, and write the guide in simple 9th-grade language with key terms, main concepts, worked examples and self-check questions. Save it into data.json under study_guides and run ./publish.sh so it shows up in my Study Guides app.`;
+  return `Make me a study guide for ${what}.\n\nUse the /morning-sync study-guide procedure: open HMH Ed, find the matching textbook chapter/lesson, read the sections that cover this topic, and write the guide in simple 9th-grade language with key terms, main concepts and worked examples. Do not add self-check tests or quiz questions for Arabic classes. Save it into data.json under study_guides and run ./publish.sh so it shows up in my Study Guides app.`;
 }
 function requestStudyGuide(id) {
   const a = ((state.data && state.data.assignments) || []).find(x => x.id === id) || allTodos().find(t => t.id === id);
@@ -797,6 +822,7 @@ function runCommand(raw) {
   if ((m = l.match(/^(buy|sell)\s+\$\s?([\d,.]+)\s*(?:(?:worth\s+)?of\s+)?([a-z.]{1,6})\b(?:.*?limit\s+\$?([\d.]+))?/))) { prefillTicket({ side: m[1], unit: 'dollars', amount: m[2].replace(/,/g, ''), symbol: m[3], type: m[4] ? 'limit' : 'market', limit: m[4], build: true }); switchTab('ticket'); return; }
   if ((m = l.match(/^(buy|sell)\s+([\d.]+)\s+(?:shares?\s+(?:of\s+)?)?([a-z.]{1,6})\b(?:.*?limit\s+\$?([\d.]+))?/))) { prefillTicket({ side: m[1], unit: 'shares', amount: m[2], symbol: m[3], type: m[4] ? 'limit' : 'market', limit: m[4], build: true }); switchTab('ticket'); return; }
   if ((m = l.match(/^(buy|sell)\s+([a-z.]{1,6})\b/))) { prefillTicket({ side: m[1], symbol: m[2] }); switchTab('ticket'); return; }
+  if (/^(make|create|give|write)( me)?( a| an)? (personal )?(test|quiz)\b/.test(l)) { generateTest(t.replace(/^(make|create|give|write)( me)?( a| an)? (personal )?(test|quiz)\b\s*(on|about|for)?\s*/i, '') || 'my recent class work'); return; }
   if (/study guide/.test(l)) {
     const a = ((state.data && state.data.assignments) || []).find(x => l.includes((x.course || '').toLowerCase()) && x.course) ;
     openCommand(a ? studyGuideCommand(a) : t + '\n\n(Use the /morning-sync study-guide procedure: open HMH Ed, read the matching chapter, write a 9th-grade study guide, save it to data.json and run ./publish.sh.)', 'Make Study Guide'); return;
@@ -814,13 +840,42 @@ let aiModel = 'openverse';
 const setModelUI = () => $$('#model-seg button').forEach(b => b.classList.toggle('active', b.dataset.model === aiModel));
 setModelUI();
 $('#model-seg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; aiModel = b.dataset.model; lsSet(LS.model, aiModel); setModelUI(); });
-const TOOL_CMD = /^(run halal|halal|swing scan|buy|sell|add|remind|todo|task|open|launch|go to|lock|stocks|portfolio|robinhood|settings|preferences|dark|light|auto|make me a study guide|study guide)/i;
+const TOOL_CMD = /^(run halal|halal|swing scan|buy|sell|add|remind|todo|task|open|launch|go to|lock|stocks|portfolio|robinhood|settings|preferences|dark|light|auto|make me a study guide|study guide|(make|create|give|write)( me)?( a| an)? (personal )?(test|quiz)\b)/i;
 $('#cmdbar').addEventListener('submit', e => {
   e.preventDefault(); const v = $('#cmd-input').value.trim(); $('#cmd-input').value = '';
   if (!v) return;
   if (aiModel === 'openverse' && !TOOL_CMD.test(v)) askOpenVerse(v); else runCommand(v);
 });
 const OVA_URL = 'https://open-verse-ai.boukeilehm.workers.dev';
+// Asks OpenVerse and returns its JSON answer (with the same retries as the question box).
+async function ovaQuery(q) {
+  const key = lsGet(LS.gemini, ''); if (!key) throw new Error('Add your OpenVerse AI key in Settings first');
+  let r = null;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    r = await fetch(OVA_URL + '/v1/ask', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key }, body: JSON.stringify({ question: q, top_k: 3 }) });
+    if (r.status !== 429 && r.status !== 503) break;
+    if (attempt < 3) await new Promise(res => setTimeout(res, ((+r.headers.get('Retry-After')) || (2 ** attempt)) * 1000));
+  }
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error((j.error && j.error.message) || r.statusText);
+  return j;
+}
+// "make me a test on X": OpenVerse writes the questions, and the test is saved as a study guide.
+async function generateTest(topic) {
+  if (/arabic/i.test(topic)) { toast('Arabic tests are turned off'); return; }
+  toast('Making your test with OpenVerse AI…', 10000);
+  const prompt = `Write a 5-question multiple-choice test on: ${topic}. Reply with only JSON in this form: {"title":"short title","questions":[{"q":"question","choices":["A","B","C","D"],"answer":"the correct choice text","explain":"one sentence why"}]}. Use simple 9th-grade language.`;
+  try {
+    const j = await ovaQuery(prompt);
+    const raw = String(j.answer || ''); const a = raw.indexOf('{'), b = raw.lastIndexOf('}');
+    const obj = JSON.parse(raw.slice(a, b + 1));
+    const qs = (obj.questions || []).filter(q => q && q.q);
+    if (!qs.length) throw new Error('no questions came back');
+    const test = { id: 'test-' + Date.now().toString(36), title: obj.title || ('Test: ' + topic), course: 'Personal test', source: 'OpenVerse AI', created_at: new Date().toISOString(), summary: 'Make it yourself first, then open the answer.', key_terms: [], concepts: [], examples: [], practice: qs.map(q => ({ q: q.q, a: [...(q.choices || []).map((c, i) => String.fromCharCode(65 + i) + '. ' + c), '', 'Answer: ' + (q.answer || '') + (q.explain ? ' — ' + q.explain : '')].join('\n') })) };
+    state.data = state.data || {}; state.data.study_guides = [test, ...((state.data.study_guides) || [])];
+    scheduleSync(); renderGuides(test.id); openSheet($('#sheet-guides')); toast('Test ready');
+  } catch (e) { toast('Could not make the test: ' + (e.message || e.name)); }
+}
 async function askOpenVerse(q) {
   const key = lsGet(LS.gemini, '');
   if (!key) { toast('Add your OpenVerse AI key in Settings first'); openSettings(); return; }
@@ -1134,3 +1189,22 @@ async function init() {
 }
 init();
 })();
+
+/* ------------------------------------------------ collapsible sections */
+const FOLD_KEY = 'cc.folded';
+function initFolds() {
+  const folded = new Set(lsGet(FOLD_KEY, []) || []);
+  document.querySelectorAll('.widget').forEach(w => {
+    const head = w.querySelector(':scope > .widget-head'); if (!head || !w.id) return;
+    const btn = document.createElement('button');
+    btn.type = 'button'; btn.className = 'fold'; btn.setAttribute('aria-label', 'Collapse or open this section');
+    const paint = f => { w.classList.toggle('collapsed', f); btn.textContent = f ? '▸' : '▾'; btn.setAttribute('aria-expanded', String(!f)); };
+    paint(folded.has(w.id));
+    btn.addEventListener('click', () => {
+      const f = !w.classList.contains('collapsed'); paint(f);
+      const set = new Set(lsGet(FOLD_KEY, []) || []); if (f) set.add(w.id); else set.delete(w.id); lsSet(FOLD_KEY, [...set]);
+    });
+    head.appendChild(btn);
+  });
+}
+initFolds();
